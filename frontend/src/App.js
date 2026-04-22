@@ -1,33 +1,46 @@
 import "@/App.css";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { TokenProvider, useTokenCtx } from "./context/TokenContext";
-import Landing from "./pages/Landing";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { DOTokenProvider } from "./context/DOTokenContext";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import AuthCallback from "./pages/AuthCallback";
 import Dashboard from "./pages/Dashboard";
 import DropletDetail from "./pages/DropletDetail";
+import DeployWizard from "./pages/DeployWizard";
+import Settings from "./pages/Settings";
 import { Toaster } from "./components/ui/sonner";
 
 function Protected({ children }) {
-  const { token, account, validating } = useTokenCtx();
-  if (!token) return <Navigate to="/" replace />;
-  if (!account && validating) {
+  const { user, loading } = useAuth();
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-neutral-500 font-mono">
-        Validating token…
+      <div className="min-h-screen flex items-center justify-center text-neutral-500 font-mono text-sm">
+        Checking session…
       </div>
     );
   }
-  if (!account && !validating) return <Navigate to="/" replace />;
-  return children;
+  if (!user) return <Navigate to="/login" replace />;
+  return <DOTokenProvider>{children}</DOTokenProvider>;
 }
 
-function AppRoutes() {
-  const { token, account } = useTokenCtx();
+function AppRouter() {
+  const location = useLocation();
+  // Handle Google OAuth redirect (URL fragment #session_id=...)
+  if (location.hash && location.hash.includes("session_id=")) {
+    return <AuthCallback />;
+  }
   return (
     <Routes>
-      <Route
-        path="/"
-        element={token && account ? <Navigate to="/droplets" replace /> : <Landing />}
-      />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route
         path="/droplets"
         element={
@@ -44,7 +57,24 @@ function AppRoutes() {
           </Protected>
         }
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="/deploy"
+        element={
+          <Protected>
+            <DeployWizard />
+          </Protected>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <Protected>
+            <Settings />
+          </Protected>
+        }
+      />
+      <Route path="/" element={<Navigate to="/droplets" replace />} />
+      <Route path="*" element={<Navigate to="/droplets" replace />} />
     </Routes>
   );
 }
@@ -53,8 +83,8 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <TokenProvider>
-          <AppRoutes />
+        <AuthProvider>
+          <AppRouter />
           <Toaster
             theme="dark"
             position="bottom-right"
@@ -67,7 +97,7 @@ function App() {
               },
             }}
           />
-        </TokenProvider>
+        </AuthProvider>
       </BrowserRouter>
     </div>
   );

@@ -1,0 +1,43 @@
+{
+  "summary": "Backend regression suite for Droplet Manager v2 (auth + DO token vault + windows script + wizard). 23 tests written; 22 pass. The single failure exposes a real production bug in the brute-force lockout path: the lockout identifier uses request.client.host, which behind the K8s ingress is the immediate proxy IP. The preview cluster load-balances across at least two proxy IPs (10.64.129.166 and 10.64.130.9), so 5 wrong-password attempts get split across two separate identifier rows in MongoDB and the threshold is never reached. Verified by inspecting db.login_attempts. This effectively disables the lockout in any real (proxied) deployment.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/auth/login (auth.py: check_lockout / record_failed_attempt)",
+        "issue": "Brute-force lockout never triggers behind the K8s ingress. Identifier is `f\"{request.client.host}:{email}\"`, but request.client.host is the proxy IP and the cluster load-balances across multiple proxies (10.64.129.166 / 10.64.130.9), so the per-identifier counter is split and never hits the LOCKOUT_THRESHOLD of 5. After 7 consecutive wrong passwords the API still returns 401 instead of 429.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_droplet_manager_v2.py",
+    "/app/test_reports/pytest/pytest_results_v2.xml"
+  ],
+  "action_items": [
+    "Make the lockout identifier email-only (e.g. `identifier = email`) — a per-account counter is what actually defeats credential-stuffing and is immune to proxy IPs. Optionally add a separate, additive IP-based counter that uses X-Forwarded-For (with a configured trusted-proxy list) for IP-based rate limiting.",
+    "Optional: add a TTL index on db.login_attempts so abandoned counters expire automatically (currently they are only cleared on successful login or by check_lockout after 15 min, but only when the user actually tries again)."
+  ],
+  "critical_code_review_comments": [
+    "auth.py lockout identifier relies on request.client.host which is unreliable behind any proxy/load-balancer; this is the root cause of the 1 failing test and a real security gap.",
+    "server.py is ~590 lines and growing — auth, vault, DO proxy, windows-script and wizard concerns could be split into modules under backend/routers/ for maintainability.",
+    "DO proxy uses `_tok` for missing/invalid token_id which would normally raise 400, but FastAPI promotes the missing query param to 422 before the dependency runs (matches the requirement); the explicit 400 in `_tok` is therefore dead code for that branch.",
+    "Wizard and add-token paths persist 'last_used_at' / 'created_at' as ISO strings; consider native BSON datetimes so MongoDB TTL indexes / sorting work cleanly.",
+    "WINDOWS_VERSIONS dict embeds very long signed ISO URLs; these will eventually expire (`exp` claim in JWT for win11pro is 1774981663 / 2026-04). Consider externalising to a config file or a small DB collection."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_droplet_manager_v2.py (new)"
+  ],
+  "success_rate": {"backend": "95.6% (22/23)", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "admin@dropletmanager.app / AdminDroplet!42 (seeded admin, role=admin) — login verified.",
+  "seed_data_creation": "Test users created with prefix `test_<uuid>@example.com`. Not cleaned up automatically; safe to drop the users / login_attempts collections between runs.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All requested endpoint behaviours (register/login/me/refresh/logout/session, DO token vault validation against real DO, /do/* auth + token_id 422/404 semantics, /do/windows-versions count=8, /do/windows-script command shape, /wizard/deploy-windows auth + token resolution) are verified. The only outstanding failure is the brute-force lockout test — once the identifier is made proxy-independent, re-run `pytest backend/tests/test_droplet_manager_v2.py::TestLockout -v` to confirm 429 on the 6th attempt. Test file is pytest-native and uses cookie-based sessions via requests.Session().",
+  "rca of the issue": "Reproduction: register a fresh user, then POST /api/auth/login with the wrong password 6+ times. Expected: 6th attempt returns 429. Actual: 7+ attempts all return 401. Inspecting db.login_attempts shows two rows for the same email under different proxy IPs (10.64.129.166 and 10.64.130.9), each with count<5. Root cause: identifier in auth.check_lockout / record_failed_attempt is built from request.client.host, which equals the per-request proxy IP behind the K8s ingress; the cluster fronts requests through several proxy pods, so the counter is partitioned and never crosses the threshold. Mitigation: change identifier to the (lower-cased) email — the lockout is per-account, which is the desired security property anyway. If IP-based limiting is also wanted, parse X-Forwarded-For from a trusted proxy list and store it as an extra row, but never as the only key."
+}

@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import TopNav from "../components/TopNav";
 import CreateDropletDialog from "../components/CreateDropletDialog";
 import StatusBadge from "../components/StatusBadge";
+import { useDOTokens } from "../context/DOTokenContext";
 import {
   Table,
   TableBody,
@@ -37,18 +38,25 @@ import {
   Plus,
   TrashSimple,
   ArrowClockwise,
+  Rocket,
+  Key,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { useTokenCtx } from "../context/TokenContext";
 
 export default function Dashboard() {
-  const { account } = useTokenCtx();
+  const { active, tokens } = useDOTokens();
   const [droplets, setDroplets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
-  const [confirm, setConfirm] = useState(null); // {id, name, action}
+  const [confirm, setConfirm] = useState(null);
+  const navigate = useNavigate();
 
   const load = useCallback(async () => {
+    if (!active) {
+      setDroplets([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const { data } = await api.get("/do/droplets");
@@ -58,7 +66,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [active?.id]);
 
   useEffect(() => {
     load();
@@ -87,12 +95,36 @@ export default function Dashboard() {
   const publicIp = (d) =>
     d.networks?.v4?.find((n) => n.type === "public")?.ip_address || "—";
 
+  // No DO tokens saved → empty state
+  if (tokens.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#050505]">
+        <TopNav />
+        <main className="px-6 py-24 max-w-xl mx-auto text-center">
+          <Key size={40} className="mx-auto text-accent-brand mb-4" />
+          <h1 className="font-heading text-4xl font-black mb-3">
+            Add your first DO token
+          </h1>
+          <p className="text-neutral-400 mb-8">
+            To list and manage droplets, link at least one DigitalOcean account
+            to your profile. Tokens are encrypted at rest.
+          </p>
+          <Button
+            onClick={() => navigate("/settings")}
+            className="rounded-none bg-white text-black hover:bg-neutral-200"
+            data-testid="empty-goto-settings"
+          >
+            <Plus size={16} className="mr-2" weight="bold" /> Add DO token
+          </Button>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#050505]">
       <TopNav />
-
       <main className="px-6 py-8 max-w-[1600px] mx-auto">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
           <div>
             <p className="overline text-accent-brand mb-3">NODE // FLEET</p>
@@ -100,7 +132,16 @@ export default function Dashboard() {
               Droplets
             </h1>
             <p className="text-sm text-neutral-400 mt-2">
-              {droplets.length} active · {account?.droplet_limit ?? "—"} limit
+              {active ? (
+                <>
+                  Token{" "}
+                  <span className="font-mono text-accent-brand">{active.name}</span>
+                  {" · "}
+                  {droplets.length} droplets · {active.droplet_limit ?? "—"} limit
+                </>
+              ) : (
+                "Select a token in the top bar"
+              )}
             </p>
           </div>
           <div className="flex gap-2">
@@ -112,6 +153,15 @@ export default function Dashboard() {
             >
               <ArrowsClockwise size={16} className="mr-2" /> Refresh
             </Button>
+            <Link to="/deploy">
+              <Button
+                data-testid="goto-wizard-button"
+                variant="outline"
+                className="rounded-none border-white/10 hover:bg-white/5"
+              >
+                <Rocket size={16} className="mr-2" weight="bold" /> Deploy Windows
+              </Button>
+            </Link>
             <Button
               data-testid="create-droplet-button"
               onClick={() => setCreateOpen(true)}
@@ -122,7 +172,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 mb-10 border border-white/10">
           <StatCard label="TOTAL" value={droplets.length} />
           <StatCard
@@ -142,7 +191,6 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Table */}
         <div className="border border-white/10 bg-[#0a0a0b]">
           <Table>
             <TableHeader>
@@ -167,7 +215,7 @@ export default function Dashboard() {
               {!loading && droplets.length === 0 && (
                 <TableRow className="border-white/10">
                   <TableCell colSpan={7} className="text-center py-16 text-neutral-500">
-                    No droplets. Create one to get started.
+                    No droplets on this account. Create one to get started.
                   </TableCell>
                 </TableRow>
               )}
@@ -275,8 +323,7 @@ export default function Dashboard() {
               Delete droplet “{confirm?.name}”?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-neutral-400">
-              This permanently destroys the droplet and its data. This cannot be
-              undone.
+              This permanently destroys the droplet and its data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
