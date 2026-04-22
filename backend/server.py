@@ -79,7 +79,7 @@ async def register(payload: RegisterReq, request: Request, response: Response):
 @api.post("/auth/login")
 async def login(payload: LoginReq, request: Request, response: Response):
     email = payload.email.lower().strip()
-    identifier = f"{request.client.host if request.client else '?'}:{email}"
+    identifier = f"email:{email}"
     await auth_mod.check_lockout(db, identifier)
 
     user = await db.users.find_one({"email": email})

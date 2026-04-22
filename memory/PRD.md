@@ -1,40 +1,42 @@
 # Droplet Manager — PRD
 
 ## Problem Statement (verbatim)
-Build a web app to manage Digital Ocean droplets using an API token, with the ability to install Windows OS via the akumalabs/reinstall kernel.sh script.
-
-## User Choices (from ask_human)
-- API Token handling: Entered in UI, stored per-session (sessionStorage)
-- Authentication: None (single-user)
-- Droplet operations: Full CRUD + power actions + console link + snapshots
-- Windows install: DO Recovery Console / user-data (paste-generated command)
-- Windows parameters: Version picker (Win10/11/Server 2012–2025/LTSC), custom RDP port, custom RDP password
+Build a web app to manage Digital Ocean droplets using an API token, with the ability to install Windows OS via the akumalabs/reinstall kernel.sh script. (v2) Add login/register accounts, store multiple DO API tokens per user, switch between accounts, deploy-Linux-then-install-Windows wizard.
 
 ## Architecture
-- **Backend**: FastAPI thin async proxy over `https://api.digitalocean.com/v2`, `httpx` HTTP client. All endpoints under `/api/do/*`. Token read from `X-DO-Token` header per request, no server-side storage.
-- **Frontend**: React (CRA) + react-router + shadcn UI + phosphor-icons + sonner toasts. Dark "Control Room" Swiss aesthetic (Chivo / IBM Plex Sans / JetBrains Mono).
-- **Database**: MongoDB present but not used (no persisted state).
+- **Backend**: FastAPI + MongoDB + httpx async proxy to `api.digitalocean.com/v2`
+  - `auth.py` — JWT email/password (access 1d / refresh 7d, bcrypt, brute-force lockout per email) + Emergent Google OAuth session exchange. Both paths produce httpOnly cookies that `get_current_user` resolves uniformly.
+  - `crypto_utils.py` — Fernet symmetric encryption for DO tokens at rest (`TOKEN_ENCRYPTION_KEY` env).
+  - `server.py` — `/api/auth/*`, `/api/do-tokens/*` vault, `/api/do/*` proxy (requires auth + `?token_id=` query), `/api/do/windows-versions` (public), `/api/do/windows-script`, `/api/wizard/deploy-windows`.
+  - MongoDB collections: `users`, `user_sessions`, `login_attempts`, `do_tokens`, `wizard_jobs`.
+- **Frontend**: React + react-router + shadcn UI + phosphor-icons + sonner toasts. `AuthProvider` wraps app; `DOTokenProvider` wraps protected routes; axios has `withCredentials: true` and auto-injects `token_id` for `/do/*` calls.
 
-## What's been implemented (2026-02-22)
-- Token entry landing page with session-scoped storage
-- Dashboard: droplet table with status pills, region, size, IP, image, row dropdown actions
-- Create Droplet dialog: region/size/image/SSH keys from DO API
-- Droplet detail with tabs: Power, Install Windows, Snapshots, Console
-- Power panel: on, off (hard), shutdown, reboot, power_cycle, password_reset with confirmations
-- Snapshots panel: list, create, delete, restore (rebuild from snapshot)
-- Windows install panel: version select, RDP password (with generator + show/hide), RDP port, command preview, copy-to-clipboard, open DO Console link
-- Windows script generator backend: handles 8 versions (7 ISO + 1 DD), validates password/port, escapes shell-unsafe quotes
-- 22 backend tests passing (token-requirement, allow-list, script validation, DO-forwarded auth)
+## What's been implemented
+### v1 (2026-02-22)
+- Session-scoped DO token flow, droplet CRUD, power actions, snapshots, console link, Windows install command generator, dark Swiss UI.
 
-## Next Action Items / Backlog
-- P1: Monitoring graphs (CPU, bandwidth, disk) on droplet detail
-- P1: Floating IPs management
-- P1: Domains & DNS records management
-- P2: Firewalls & VPC
-- P2: Persistent settings (remembered preferences) if user opts in to DB
-- P2: Long-lived ISO URL hosting for Win11 (current zerofs URL has `exp` timestamp)
-- P2: Post-install `--rdp-port` fallback — inject PowerShell post-install if akumalabs kernel ignores flag
+### v2 (2026-02-22)
+- **Accounts** — JWT register/login/logout/me/refresh + Emergent Google social login
+- **DO token vault** — multi-token per user, encrypted at rest (Fernet), validated against DO on save, rename/delete/switch
+- **Token switcher** in top nav; **Settings** page to manage vault
+- **Deploy wizard** — 3-step flow: Linux specs → Windows config → live droplet polling with command/console link
+- **Brute-force lockout** per email (proxy-IP independent) — 5 fails = 15-min lockout, 429 response
+- **Admin seeding** from env on startup
+- CORS auto-swaps wildcard → explicit origins when credentials=true
+- 23 backend tests passing (22/23 initially, 1 critical lockout bug fixed after review)
+
+## Seeded admin
+`admin@dropletmanager.app` / `AdminDroplet!42` (see `/app/memory/test_credentials.md`)
+
+## Backlog / Next Action Items
+- P1: Monitoring graphs (CPU/disk/bandwidth) on droplet detail
+- P1: Floating IPs + Domains/DNS management
+- P2: Firewalls, VPCs, native MongoDB BSON datetimes, long-lived Win11 ISO hosting
+- P2: Split server.py into `backend/routers/{auth,tokens,do,wizard}.py`
+- P2: TTL index on `login_attempts`; trusted-proxy `X-Forwarded-For` handling if IP-based limiting is added later
+- P2: Email verification + password-reset flow (infra already wired via `password_reset_tokens`)
 
 ## Personas
-- DevOps engineer renting DO droplets for Windows workloads (RDP, game/app hosting)
-- Sysadmin who wants a fast console to mass-manage fleets without DO web UI
+- DevOps engineer managing multiple DO client accounts from a single console
+- Sysadmin deploying Windows-on-DO droplets for RDP / game-server / specialty workloads
+- Agency / reseller onboarding client DO tokens without juggling dashboards
