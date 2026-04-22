@@ -1,0 +1,98 @@
+{
+  "theme": "DARK",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "domain": "Enterprise SaaS, Developer Tools",
+  "visual_mood": "Objective, rigid, functional, technical, high-contrast. Minimalist 'Control Room' aesthetic.",
+  "typography": {
+    "headings": {
+      "family": "Chivo, sans-serif",
+      "weights": ["400", "700", "900"],
+      "styling": "tracking-tight leading-none",
+      "h1": "text-4xl sm:text-5xl",
+      "h2": "text-2xl sm:text-3xl",
+      "h3": "text-xl sm:text-2xl"
+    },
+    "body": {
+      "family": "IBM Plex Sans, sans-serif",
+      "weights": ["400", "500"],
+      "styling": "leading-relaxed text-base md:text-sm",
+      "small_text": "text-sm text-neutral-400",
+      "overlines": "text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500"
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "weights": ["400"],
+      "usage": "Code blocks, IP addresses, IDs, technical specs, Terminal/CLI output"
+    }
+  },
+  "color_palette": {
+    "background": "#050505",
+    "surface": "#0F0F10",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "border_hover": "rgba(255, 255, 255, 0.2)",
+    "foreground": "#FAFAFA",
+    "muted": "rgba(255, 255, 255, 0.05)",
+    "muted_foreground": "#A3A3A3",
+    "primary": "#FFFFFF",
+    "primary_foreground": "#000000",
+    "accent_brand": "#00E5FF",
+    "destructive": "#E53E3E",
+    "destructive_foreground": "#FFFFFF",
+    "status": {
+      "active": {"text": "#34D399", "bg": "rgba(52, 211, 153, 0.1)", "border": "rgba(52, 211, 153, 0.2)"},
+      "off": {"text": "#FB7185", "bg": "rgba(251, 113, 133, 0.1)", "border": "rgba(251, 113, 133, 0.2)"},
+      "new": {"text": "#FBBF24", "bg": "rgba(251, 191, 36, 0.1)", "border": "rgba(251, 191, 36, 0.2)"}
+    }
+  },
+  "layout_and_spacing": {
+    "grid_system": "MODE B: THE CONTROL ROOM GRID. grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with gap-4 or gap-6. Every pixel utilized, h-full on children.",
+    "spacing_scale": "p-4, p-6, p-8 for dense data. p-12 or p-16 for landing/token entry.",
+    "alignment": "Strict left-alignment for data and forms. Center alignment only for Token Entry modal.",
+    "surfaces": {
+      "cards": "Flat background (#0F0F10), 1px border-border/40, no shadow. Technical Grid Borders approach.",
+      "header": "Solid background (#050505) with border-b border-border/40. Sticky z-50.",
+      "modals": "Solid surface (#0F0F10) with sharp edges or max 4px radius, 1px border-border."
+    }
+  },
+  "components": {
+    "buttons": "Square or max rounded-sm. Primary: bg-white text-black hover:bg-neutral-200. Secondary: border border-border/40 hover:bg-white/5.",
+    "tables": "Shadcn Table. Dense rows (py-2 or py-3). Grid borders style - visible bottom borders on rows. Use JetBrains Mono for IPs and IDs.",
+    "tabs": "Shadcn Tabs. Override fixed heights (h-auto). Technical underline style preferred over pill style.",
+    "inputs": "Shadcn Form/Input. Flat, bg-black, border-white/10, focus:border-white/40 focus:ring-0. Square or rounded-sm.",
+    "dialogs": "Shadcn Dialog. Dark solid background, subtle border, no heavy backdrop-blur to maintain performance.",
+    "toasts": "Sonner. Dark mode theme, bottom-right placement.",
+    "data_display": "Use 'Label + Value' pairs heavily. Labels in uppercase overline style. Values in high-contrast text or monospace."
+  },
+  "motion_and_interactions": {
+    "hover": "Subtle border color shifts (border-white/10 to border-white/20). NO transform scales for dashboard items.",
+    "transitions": "transition-colors duration-200 ease-out.",
+    "loading": "Use monospace ASCII loaders or simple fast linear progress bars at the top of the screen."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Regular or Light weight. Minimalist, technical aesthetic.",
+    "installation": "yarn add @phosphor-icons/react"
+  },
+  "media": {
+    "login_background": {
+      "url": "https://images.pexels.com/photos/29333569/pexels-photo-29333569.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Dynamic abstract image of blue light streaks in motion over a dark background.",
+      "usage": "Use as a full-screen ambient background behind the API Token entry modal. Must have a heavy overlay (e.g., bg-black/80 or gradient) to maintain deep dark mode and high contrast for the login modal."
+    }
+  },
+  "testing": {
+    "attributes": "All interactive elements, inputs, and key data points MUST have data-testid attributes (e.g., data-testid='droplet-connect-button', data-testid='droplet-row-1234')."
+  },
+  "instructions_to_main_agent": [
+    "1. Start by implementing the API Token entry view. Ensure it persists token securely (localStorage/sessionStorage).",
+    "2. Build the main dashboard layout with a Top Nav and a dense, Control Room-style data grid.",
+    "3. Use Shadcn components for Data Tables, Tabs, Dialogs, Selects, and Forms.",
+    "4. Droplet List: Display droplets in a dense table. Use JetBrains Mono for IPs. Include quick actions in the row.",
+    "5. Droplet Details: Use a multi-tab interface (Overview, Power, Snapshots, Reinstall, Console).",
+    "6. Windows Reinstall Panel: Build a dedicated form for selecting OS version, setting RDP port/password, and displaying the generated reinstall bash command. Ensure destructive confirmation.",
+    "7. Apply 'Grid Borders' styling: subtle 1px white/10 borders to separate sections. Avoid deep shadows.",
+    "8. Ensure WCAG AA contrast for text, explicitly defining hover states (e.g., hover:bg-white/10 hover:text-white).",
+    "9. Include data-testid attributes extensively.",
+    "10. Do NOT use fake image placeholders. Use only the provided image URL or CSS styling."
+  ]
+}
