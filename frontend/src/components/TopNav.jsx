@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import AddTokenDialog from "./AddTokenDialog";
+import VerifyEmailBanner from "./VerifyEmailBanner";
 import {
   CaretDown,
   Key,
@@ -30,6 +31,7 @@ export default function TopNav() {
 
   return (
     <header className="sticky top-0 z-50 bg-[#050505]/95 backdrop-blur-sm border-b border-white/10">
+      <VerifyEmailBanner />
       <div className="flex items-center justify-between px-6 h-14 gap-4">
         <div className="flex items-center gap-6 min-w-0">
           <Link to="/droplets" className="flex items-center gap-2" data-testid="nav-home">

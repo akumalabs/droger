@@ -98,12 +98,14 @@ export default function Login() {
         </Button>
       </form>
 
-      <p className="text-sm text-neutral-400 mt-6">
-        New here?{" "}
+      <div className="flex items-center justify-between text-sm text-neutral-400 mt-6">
+        <Link to="/forgot-password" className="text-neutral-400 hover:text-accent-brand" data-testid="goto-forgot">
+          Forgot password?
+        </Link>
         <Link to="/register" className="text-accent-brand hover:underline" data-testid="goto-register">
           Create an account
         </Link>
-      </p>
+      </div>
     </AuthShell>
   );
 }

@@ -181,11 +181,12 @@ async def check_lockout(db, identifier: str) -> None:
 
 
 async def record_failed_attempt(db, identifier: str) -> None:
+    now = datetime.now(timezone.utc)
     await db.login_attempts.update_one(
         {"identifier": identifier},
         {
             "$inc": {"count": 1},
-            "$set": {"last_attempt": datetime.now(timezone.utc).isoformat()},
+            "$set": {"last_attempt": now},
         },
         upsert=True,
     )

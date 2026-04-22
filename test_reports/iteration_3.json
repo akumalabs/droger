@@ -1,0 +1,59 @@
+{
+  "summary": "Backend-only regression + new P2 testing for Droplet Manager v2 after server.py was split into routers/* modules and email verification + password reset + TTL indexes were added. All 23 prior regression tests PASS; all 16 new tests for email verification, password reset, TTL indexes and the lockout-with-native-datetime regression PASS. Real Resend API confirmed sending emails (Resend message IDs returned in backend logs).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/auth/register and /api/auth/resend-verification",
+        "issue": "Resend free-tier limit is 2 requests/sec; under bursty load (e.g. test suite) some sends fail with 'Too many requests'. mailer.py correctly swallows the exception and the endpoint returns {ok:true, sent:false}, so requests do NOT 5xx — but verification emails will silently not arrive. Consider adding a tiny retry-with-backoff inside mailer.send_email (or a background queue) so a transient Resend rate-limit error is retried rather than dropped."
+      },
+      {
+        "endpoint": "POST /api/auth/forgot-password",
+        "issue": "Endpoint is unauthenticated and unrate-limited (only login has the brute-force lockout). Anyone can spam /forgot-password for known emails which would burn through Resend quota and cause repeated emails to real users. Recommend reusing the lockout/rate-limit machinery (e.g. cap forgot-password requests per email to 3/hour)."
+      },
+      {
+        "endpoint": "POST /api/auth/verify-email and /api/auth/reset-password",
+        "issue": "Both rely on TTL on `expires_at`. MongoDB TTL monitor only sweeps every 60s, so a verify-email/reset-password attempt within ~1min of expiry can still hit the row. Code handles this correctly (manual expires_at check + 400). Just noting that TTL is for cleanup, not authoritative expiry — current implementation is correct."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_droplet_manager_v2.py",
+    "/app/backend/tests/test_email_verification_and_reset.py",
+    "/app/test_reports/pytest/regression_iter3.xml",
+    "/app/test_reports/pytest/p2_email_reset_iter3.xml"
+  ],
+  "action_items": [
+    "Consider adding rate-limiting to /api/auth/forgot-password (and optionally /api/auth/resend-verification) to prevent abuse and Resend quota burn.",
+    "Consider a small retry-with-backoff in mailer.send_email so Resend's 2 req/sec rate-limit errors don't silently drop verification emails."
+  ],
+  "critical_code_review_comments": [
+    "server.py split is clean: routers/{auth_routes,tokens,do_proxy,windows,wizard}.py each own a domain; shared db.py + deps.py are good. server.py is now ~110 lines.",
+    "auth_routes.py is 291 lines — borderline; if more endpoints are added (2FA, sessions list, etc.) consider splitting into auth_email.py + auth_password.py + auth_oauth.py.",
+    "_public_user() is duplicated in auth_routes.py and likely needed in other routers eventually — move to deps.py to keep DRY.",
+    "`secrets.token_urlsafe(32)` used for both verification and reset — good (cryptographically strong, URL-safe).",
+    "/api/auth/reset-password correctly clears login-attempt rows after a successful reset — good UX so a locked-out user isn't still locked after resetting.",
+    "POST /api/auth/forgot-password always returns {ok:true} regardless of user existence — correctly avoids email enumeration.",
+    "TTL index on login_attempts uses expireAfterSeconds=900 (15 min) on `last_attempt`, and last_attempt is now a native datetime — verified the document stores BSON datetime so TTL will actually reap it.",
+    "TTL on email_verification_tokens.expires_at and password_reset_tokens.expires_at uses expireAfterSeconds=0 (Mongo expires the doc when expires_at <= now) — correct idiom.",
+    "Google OAuth path in /api/auth/session sets email_verified=True for new users AND for existing email-only users on next sign-in (auth_provider becomes 'both'). Verified by code-read; runtime test skipped per instructions.",
+    "/api/auth/refresh still works post-refactor — issues a fresh access_token cookie from the refresh_token cookie."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_email_verification_and_reset.py (NEW — 16 tests for verification, reset, TTL indexes, lockout regression)"
+  ],
+  "success_rate": {
+    "backend": "100% (39/39 passing: 23 regression + 16 new P2)",
+    "frontend": "not tested (backend-only as requested)"
+  },
+  "test_credentials": "admin@dropletmanager.app / AdminDroplet!42 (seeded). Test users created with mailinator addresses (test_<rand>@mailinator.com) — these DO trigger real Resend sends, but mailinator inboxes don't deliver to real people.",
+  "seed_data_creation": "Each test creates its own ephemeral user (test_<uuid8>@mailinator.com) via /api/auth/register. Tests do not clean up after themselves — users + verification/reset tokens accumulate in the DB. Recommend adding a periodic cleanup of TEST_/test_*@mailinator.com users or use a teardown fixture if running suite repeatedly in long-lived environments.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two test files in /app/backend/tests/: (1) test_droplet_manager_v2.py — auth + DO + wizard regression (23 tests); (2) test_email_verification_and_reset.py — P2 features (16 tests). Both use pymongo (sync) for direct DB inspection. Run both: `pytest /app/backend/tests/ -v`. Real Resend API key is in backend/.env — every register / resend-verification / forgot-password call sends a real email; use mailinator.com or similar throwaway addresses. To extract verification or reset tokens without an inbox, query mongo directly: `db.email_verification_tokens.find_one({email})` or `db.password_reset_tokens.find_one({user_id})`."
+}
