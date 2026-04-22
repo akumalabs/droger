@@ -1,29 +1,51 @@
 # Droplet Manager — PRD
 
 ## Problem Statement (verbatim)
-Build a web app to manage Digital Ocean droplets using an API token, with the ability to install Windows OS via the akumalabs/reinstall kernel.sh script. (v2) Add login/register accounts, store multiple DO API tokens per user, switch between accounts, deploy-Linux-then-install-Windows wizard.
+Build a web app to manage Digital Ocean droplets using an API token, with the ability to install Windows OS via the akumalabs/reinstall kernel.sh script.
 
-## Architecture
-- **Backend**: FastAPI + MongoDB + httpx async proxy to `api.digitalocean.com/v2`
-  - `auth.py` — JWT email/password (access 1d / refresh 7d, bcrypt, brute-force lockout per email) + Emergent Google OAuth session exchange. Both paths produce httpOnly cookies that `get_current_user` resolves uniformly.
-  - `crypto_utils.py` — Fernet symmetric encryption for DO tokens at rest (`TOKEN_ENCRYPTION_KEY` env).
-  - `server.py` — `/api/auth/*`, `/api/do-tokens/*` vault, `/api/do/*` proxy (requires auth + `?token_id=` query), `/api/do/windows-versions` (public), `/api/do/windows-script`, `/api/wizard/deploy-windows`.
-  - MongoDB collections: `users`, `user_sessions`, `login_attempts`, `do_tokens`, `wizard_jobs`.
-- **Frontend**: React + react-router + shadcn UI + phosphor-icons + sonner toasts. `AuthProvider` wraps app; `DOTokenProvider` wraps protected routes; axios has `withCredentials: true` and auto-injects `token_id` for `/do/*` calls.
+**v2**: accounts + multi-token vault + deploy wizard.
+**v3 (P2)**: email verification, password reset, router split, TTL indexes.
+
+## Architecture (after v3 refactor)
+```
+/app/backend/
+├── server.py            # app entry, CORS, startup (indexes + admin seed)
+├── db.py                # shared Motor AsyncIOMotorClient
+├── deps.py              # current_user FastAPI dependency
+├── auth.py              # JWT, bcrypt, lockout (native datetime), Emergent OAuth
+├── crypto_utils.py      # Fernet encryption for DO tokens
+├── mailer.py            # Resend async wrapper (console-log fallback)
+└── routers/
+    ├── auth_routes.py   # /api/auth/*
+    ├── tokens.py        # /api/do-tokens/* + resolve_token() helper
+    ├── do_proxy.py      # /api/do/*
+    ├── windows.py       # /api/do/windows-versions, /windows-script
+    └── wizard.py        # /api/wizard/deploy-windows
+```
 
 ## What's been implemented
+
 ### v1 (2026-02-22)
 - Session-scoped DO token flow, droplet CRUD, power actions, snapshots, console link, Windows install command generator, dark Swiss UI.
 
 ### v2 (2026-02-22)
-- **Accounts** — JWT register/login/logout/me/refresh + Emergent Google social login
-- **DO token vault** — multi-token per user, encrypted at rest (Fernet), validated against DO on save, rename/delete/switch
-- **Token switcher** in top nav; **Settings** page to manage vault
-- **Deploy wizard** — 3-step flow: Linux specs → Windows config → live droplet polling with command/console link
-- **Brute-force lockout** per email (proxy-IP independent) — 5 fails = 15-min lockout, 429 response
-- **Admin seeding** from env on startup
-- CORS auto-swaps wildcard → explicit origins when credentials=true
-- 23 backend tests passing (22/23 initially, 1 critical lockout bug fixed after review)
+- JWT email/password auth + Emergent Google social login
+- Per-user encrypted DO token vault (Fernet), multi-token switcher
+- Settings page, Deploy wizard (3-step with polling)
+- Brute-force lockout per email, CORS auto-config for credentials
+
+### v3 (2026-02-22) — P2 hardening
+- **Email verification** via Resend:
+  - Register creates row in `email_verification_tokens` + sends email
+  - `/api/auth/verify-email` and `/api/auth/resend-verification`
+  - Non-blocking: `email_verified: false` users have full access + top-bar banner
+  - Google OAuth users auto-verified
+- **Password reset** via Resend:
+  - `/api/auth/forgot-password` (no enumeration leak)
+  - `/api/auth/reset-password` (clears lockout on success)
+- **TTL indexes** on `login_attempts` (900s), `email_verification_tokens` and `password_reset_tokens` (expires_at=0)
+- **Router split**: server.py reduced from 590 lines → 110 lines
+- **Tests**: 39/39 passing (23 regression + 16 new P2)
 
 ## Seeded admin
 `admin@dropletmanager.app` / `AdminDroplet!42` (see `/app/memory/test_credentials.md`)
@@ -31,12 +53,11 @@ Build a web app to manage Digital Ocean droplets using an API token, with the ab
 ## Backlog / Next Action Items
 - P1: Monitoring graphs (CPU/disk/bandwidth) on droplet detail
 - P1: Floating IPs + Domains/DNS management
-- P2: Firewalls, VPCs, native MongoDB BSON datetimes, long-lived Win11 ISO hosting
-- P2: Split server.py into `backend/routers/{auth,tokens,do,wizard}.py`
-- P2: TTL index on `login_attempts`; trusted-proxy `X-Forwarded-For` handling if IP-based limiting is added later
-- P2: Email verification + password-reset flow (infra already wired via `password_reset_tokens`)
+- P2: Rate-limit `/api/auth/forgot-password` + `/resend-verification` (Resend quota protection)
+- P2: Retry-with-backoff in `mailer.send_email` for transient Resend rate-limits (2 req/sec free-tier)
+- P2: 2FA, sessions list, pane-of-glass multi-account droplet view
 
-## Personas
-- DevOps engineer managing multiple DO client accounts from a single console
-- Sysadmin deploying Windows-on-DO droplets for RDP / game-server / specialty workloads
-- Agency / reseller onboarding client DO tokens without juggling dashboards
+## Known Notes
+- Win11 ISO URL has `exp=1774981663` (expires 2026-04) — swap in `WINDOWS_VERSIONS` when it expires
+- Resend free tier is 2 req/sec; current mailer logs failures but does not retry
+- Verification/reset links point to `FRONTEND_URL` env (currently the preview domain)
