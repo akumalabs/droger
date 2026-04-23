@@ -174,6 +174,9 @@ fi
 # ----------------------------- Repo ---------------------------------------- #
 INSTALL_DIR="/opt/dm"
 
+mkdir -p "$INSTALL_DIR"
+chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$INSTALL_DIR"
+
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     sudo -u "$DEPLOY_USER" git -C "$INSTALL_DIR" pull
 else
