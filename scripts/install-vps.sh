@@ -196,47 +196,50 @@ pip install -r requirements.txt
 "
 
 # ----------------------------- Frontend (Vite Auto Fix) ----------------------------- #
-log "Frontend setup (Vite auto-fix)"
+log "Frontend setup (Vite auto-heal)"
 
 sudo -u "$DEPLOY_USER" bash -c "
 set -e
 
 cd $INSTALL_DIR/frontend
 
-echo 'Cleaning old build...'
+echo 'Cleaning previous build...'
 rm -rf node_modules package-lock.json yarn.lock dist
 
-# Ensure Node memory (fix OOM)
 export NODE_OPTIONS='--max-old-space-size=4096'
 
-echo 'Installing dependencies...'
+echo 'Installing dependencies (safe mode)...'
 npm install --legacy-peer-deps
 
-# -------------------- FIX: PostCSS / Tailwind (ESM issue) --------------------
-if [[ -f postcss.config.js ]]; then
-    mv postcss.config.js postcss.config.cjs
-fi
+# ===================== FIX: PostCSS / Tailwind ESM =====================
+echo 'Fixing PostCSS/Tailwind config...'
+if [[ -f postcss.config.js ]]; then mv postcss.config.js postcss.config.cjs; fi
+if [[ -f tailwind.config.js ]]; then mv tailwind.config.js tailwind.config.cjs; fi
 
-if [[ -f tailwind.config.js ]]; then
-    mv tailwind.config.js tailwind.config.cjs
-fi
+# ===================== FIX: CRA → Vite structure =====================
+echo 'Ensuring Vite entry...'
 
-# -------------------- FIX: CRA → Vite migration --------------------
 if [[ ! -f index.html ]]; then
-    echo 'Converting CRA → Vite structure...'
-
     if [[ -f public/index.html ]]; then
         cp public/index.html index.html
     else
-        echo '<!DOCTYPE html><html><head><meta charset=\"UTF-8\" /></head><body><div id=\"root\"></div></body></html>' > index.html
+        cat > index.html <<EOF
+<!DOCTYPE html>
+<html>
+  <head><meta charset=\"UTF-8\" /></head>
+  <body><div id=\"root\"></div></body>
+</html>
+EOF
     fi
 
-    # inject Vite entry
     sed -i 's#</body>#<script type=\"module\" src=\"/src/main.jsx\"></script></body>#' index.html || true
+fi
 
-    # create main.jsx
-    mkdir -p src
-    cat > src/main.jsx <<EOF
+mkdir -p src
+
+# ===================== FIX: React entry =====================
+if [[ ! -f src/main.jsx ]]; then
+cat > src/main.jsx <<EOF
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
@@ -248,11 +251,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 )
 EOF
-
-    rm -f src/index.js src/index.tsx 2>/dev/null || true
 fi
 
-# -------------------- FIX: ensure Vite config exists --------------------
+# ===================== FIX: JSX extension detection =====================
+echo 'Fixing JSX file extensions...'
+
+find src -type f -name '*.js' | while read file; do
+    if grep -q '<[A-Za-z]' \"$file\"; then
+        mv \"$file\" \"\${file%.js}.jsx\" || true
+    fi
+done
+
+# ===================== FIX: Vite config =====================
 if [[ ! -f vite.config.js ]]; then
 cat > vite.config.js <<EOF
 import { defineConfig } from 'vite'
@@ -264,17 +274,17 @@ export default defineConfig({
 EOF
 fi
 
-# -------------------- ENV --------------------
+# ===================== ENV =====================
 cat > .env <<EOF
 VITE_BACKEND_URL=https://$DOMAIN
 EOF
 
-# -------------------- BUILD --------------------
+# ===================== BUILD =====================
 echo 'Building frontend...'
 npm run build
 "
 
-ok "Frontend built successfully"
+ok "Frontend build completed"
 
 # ----------------------------- Supervisor ---------------------------------- #
 cat > /etc/supervisor/conf.d/dm.conf <<EOF
