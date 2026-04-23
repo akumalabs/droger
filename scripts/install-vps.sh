@@ -195,94 +195,96 @@ pip install --upgrade pip
 pip install -r requirements.txt
 "
 
-# ----------------------------- Frontend (Vite Auto Fix) ----------------------------- #
-log "Frontend setup (Vite auto-heal)"
+# ----------------------------- Frontend (Vite Safe Build) ----------------------------- #
+log "Frontend setup (Vite stable mode)"
 
-sudo -u "$DEPLOY_USER" bash -c "
+sudo -u "$DEPLOY_USER" bash -c '
 set -e
 
-cd $INSTALL_DIR/frontend
+cd '"$INSTALL_DIR/frontend"'
 
-echo 'Cleaning previous build...'
+echo "Cleaning old build..."
 rm -rf node_modules package-lock.json yarn.lock dist
 
-export NODE_OPTIONS='--max-old-space-size=4096'
+export NODE_OPTIONS="--max-old-space-size=4096"
 
-echo 'Installing dependencies (safe mode)...'
+echo "Installing dependencies..."
 npm install --legacy-peer-deps
 
-# ===================== FIX: PostCSS / Tailwind ESM =====================
-echo 'Fixing PostCSS/Tailwind config...'
-if [[ -f postcss.config.js ]]; then mv postcss.config.js postcss.config.cjs; fi
-if [[ -f tailwind.config.js ]]; then mv tailwind.config.js tailwind.config.cjs; fi
+# -------------------- FIX: PostCSS / Tailwind (ESM issue) --------------------
+echo "Fixing PostCSS/Tailwind config..."
+[ -f postcss.config.js ] && mv postcss.config.js postcss.config.cjs || true
+[ -f tailwind.config.js ] && mv tailwind.config.js tailwind.config.cjs || true
 
-# ===================== FIX: CRA → Vite structure =====================
-echo 'Ensuring Vite entry...'
-
-if [[ ! -f index.html ]]; then
-    if [[ -f public/index.html ]]; then
-        cp public/index.html index.html
-    else
-        cat > index.html <<EOF
-<!DOCTYPE html>
-<html>
-  <head><meta charset=\"UTF-8\" /></head>
-  <body><div id=\"root\"></div></body>
-</html>
-EOF
-    fi
-
-    sed -i 's#</body>#<script type=\"module\" src=\"/src/main.jsx\"></script></body>#' index.html || true
-fi
+# -------------------- FIX: Vite entry --------------------
+echo "Ensuring Vite entry..."
 
 mkdir -p src
 
-# ===================== FIX: React entry =====================
-if [[ ! -f src/main.jsx ]]; then
-cat > src/main.jsx <<EOF
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
+if [ ! -f index.html ]; then
+  if [ -f public/index.html ]; then
+    cp public/index.html index.html
+  else
+    cat > index.html <<EOF
+<!DOCTYPE html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body><div id="root"></div></body>
+</html>
+EOF
+  fi
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+  sed -i "s#</body>#<script type=\"module\" src=\"/src/main.jsx\"></script></body>#g" index.html || true
+fi
+
+# -------------------- FIX: React entry --------------------
+if [ ! -f src/main.jsx ]; then
+cat > src/main.jsx <<EOF
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
-)
+);
 EOF
 fi
 
-# ===================== FIX: JSX extension detection =====================
-echo 'Fixing JSX file extensions...'
+# -------------------- FIX: JSX conversion (SAFE - no pipes, no unbound vars) --------------------
+echo "Fixing JSX file extensions..."
 
-while IFS= read -r -d '' file; do
-    if grep -q '<[A-Za-z]' "$file"; then
-        mv "$file" "${file%.js}.jsx" || true
-    fi
-done < <(find src -type f -name '*.js' -print0 2>/dev/null || true)
+find src -type f -name "*.js" -print 2>/dev/null | while read file; do
+  [ -z "$file" ] && continue
 
-# ===================== FIX: Vite config =====================
-if [[ ! -f vite.config.js ]]; then
+  if grep -q "<[A-Za-z]" "$file" 2>/dev/null; then
+    mv "$file" "${file%.js}.jsx" 2>/dev/null || true
+  fi
+done || true
+
+# -------------------- Vite config --------------------
+if [ ! -f vite.config.js ]; then
 cat > vite.config.js <<EOF
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-})
+});
 EOF
 fi
 
-# ===================== ENV =====================
+# -------------------- ENV --------------------
 cat > .env <<EOF
-VITE_BACKEND_URL=https://$DOMAIN
+VITE_BACKEND_URL=https://'"$DOMAIN"'
 EOF
 
-# ===================== BUILD =====================
-echo 'Building frontend...'
+# -------------------- BUILD --------------------
+echo "Building frontend..."
 npm run build
-"
+'
 
 ok "Frontend build completed"
 
