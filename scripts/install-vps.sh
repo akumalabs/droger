@@ -195,26 +195,47 @@ pip install --upgrade pip
 pip install -r requirements.txt
 "
 
-# ----------------------------- Frontend (Vite) ----------------------------- #
-log "Frontend setup (Vite)"
+# ----------------------------- Frontend (Vite Auto Fix) ----------------------------- #
+log "Frontend setup (Vite auto-fix)"
 
 sudo -u "$DEPLOY_USER" bash -c "
+set -e
+
 cd $INSTALL_DIR/frontend
 
-rm -rf node_modules package-lock.json dist
+echo 'Cleaning old build...'
+rm -rf node_modules package-lock.json yarn.lock dist
 
+# Ensure Node memory (fix OOM)
+export NODE_OPTIONS='--max-old-space-size=4096'
+
+echo 'Installing dependencies...'
 npm install --legacy-peer-deps
 
-# ---- AUTO FIX CRA → VITE ----
+# -------------------- FIX: PostCSS / Tailwind (ESM issue) --------------------
+if [[ -f postcss.config.js ]]; then
+    mv postcss.config.js postcss.config.cjs
+fi
+
+if [[ -f tailwind.config.js ]]; then
+    mv tailwind.config.js tailwind.config.cjs
+fi
+
+# -------------------- FIX: CRA → Vite migration --------------------
 if [[ ! -f index.html ]]; then
-    echo 'Fixing CRA → Vite structure...'
+    echo 'Converting CRA → Vite structure...'
 
     if [[ -f public/index.html ]]; then
         cp public/index.html index.html
+    else
+        echo '<!DOCTYPE html><html><head><meta charset=\"UTF-8\" /></head><body><div id=\"root\"></div></body></html>' > index.html
     fi
 
-    sed -i 's#<div id=\"root\"></div>#<div id=\"root\"></div>\n<script type=\"module\" src=\"/src/main.jsx\"></script>#' index.html || true
+    # inject Vite entry
+    sed -i 's#</body>#<script type=\"module\" src=\"/src/main.jsx\"></script></body>#' index.html || true
 
+    # create main.jsx
+    mkdir -p src
     cat > src/main.jsx <<EOF
 import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -231,26 +252,29 @@ EOF
     rm -f src/index.js src/index.tsx 2>/dev/null || true
 fi
 
-# ---- VITE CONFIG ----
+# -------------------- FIX: ensure Vite config exists --------------------
+if [[ ! -f vite.config.js ]]; then
 cat > vite.config.js <<EOF
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()]
+  plugins: [react()],
 })
 EOF
+fi
 
-# ---- ENV ----
+# -------------------- ENV --------------------
 cat > .env <<EOF
 VITE_BACKEND_URL=https://$DOMAIN
 EOF
 
-# ---- BUILD ----
+# -------------------- BUILD --------------------
+echo 'Building frontend...'
 npm run build
 "
 
-ok "Frontend built"
+ok "Frontend built successfully"
 
 # ----------------------------- Supervisor ---------------------------------- #
 cat > /etc/supervisor/conf.d/dm.conf <<EOF
