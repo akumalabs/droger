@@ -256,11 +256,11 @@ fi
 # ===================== FIX: JSX extension detection =====================
 echo 'Fixing JSX file extensions...'
 
-find src -type f -name '*.js' | while read file; do
-    if grep -q '<[A-Za-z]' \"$file\"; then
-        mv \"$file\" \"\${file%.js}.jsx\" || true
+while IFS= read -r -d '' file; do
+    if grep -q '<[A-Za-z]' "$file"; then
+        mv "$file" "${file%.js}.jsx" || true
     fi
-done
+done < <(find src -type f -name '*.js' -print0 2>/dev/null || true)
 
 # ===================== FIX: Vite config =====================
 if [[ ! -f vite.config.js ]]; then
