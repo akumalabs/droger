@@ -206,8 +206,13 @@ log "Generating backend/.env"
 ENV_FILE="$INSTALL_DIR/backend/.env"
 
 gen_jwt()    { python3 -c "import secrets; print(secrets.token_hex(32))"; }
-gen_fernet() { python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null \
-               || { pip3 install -q cryptography && python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"; }; }
+gen_fernet() {
+  python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null \
+  || {
+    apt-get install -y -qq python3-cryptography >/dev/null
+    python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  }
+}
 
 # If .env already exists, preserve its secrets (idempotent)
 if [[ -f "$ENV_FILE" ]]; then
