@@ -78,10 +78,14 @@ ask() {
         printf -v "$var" '%s' "$default"
         return
     fi
+    # Read from /dev/tty so prompts work under curl|bash (where stdin = the pipe)
+    if [[ ! -e /dev/tty ]]; then
+        die "$var is required but no TTY available. Re-run with env vars (see header), or download the script first and run 'sudo bash install-vps.sh'."
+    fi
     if [[ "$secret" = "1" ]]; then
-        read -srp "$prompt${default:+ [$default]}: " val; echo
+        read -srp "$prompt${default:+ [$default]}: " val < /dev/tty; echo
     else
-        read -rp "$prompt${default:+ [$default]}: " val
+        read -rp "$prompt${default:+ [$default]}: " val < /dev/tty
     fi
     printf -v "$var" '%s' "${val:-$default}"
 }
@@ -142,16 +146,37 @@ ok "Yarn $(yarn -v)"
 if [[ "$INSTALL_MONGO" = "yes" ]]; then
     if ! command -v mongod &>/dev/null; then
         log "Installing MongoDB 7"
+        # Pick the right official MongoDB repo based on distro
+        case "$ID" in
+            ubuntu)
+                # MongoDB 7 publishes for jammy (22.04). Noble (24.04) inherits the jammy repo.
+                MONGO_BASE="https://repo.mongodb.org/apt/ubuntu"
+                MONGO_DIST="jammy"
+                MONGO_COMP="multiverse"
+                ;;
+            debian)
+                MONGO_BASE="https://repo.mongodb.org/apt/debian"
+                MONGO_COMP="main"
+                case "$VERSION_CODENAME" in
+                    bookworm) MONGO_DIST="bookworm" ;;
+                    bullseye) MONGO_DIST="bullseye" ;;
+                    trixie)
+                        warn "Debian 13 (trixie) has no official MongoDB 7 repo yet — falling back to the bookworm packages."
+                        warn "If install fails, re-run with INSTALL_MONGO=no MONGO_URL_OVERRIDE='mongodb+srv://...'"
+                        MONGO_DIST="bookworm"
+                        ;;
+                    *) die "Unsupported Debian codename: $VERSION_CODENAME. Use INSTALL_MONGO=no with an external MongoDB." ;;
+                esac
+                ;;
+            *) die "Unsupported distro: $ID" ;;
+        esac
         curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc \
             | gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-        codename=$(lsb_release -cs)
-        # jammy works for both ubuntu 22.04 and debian 12
-        [[ "$codename" = "bookworm" ]] && codename=jammy
-        [[ "$codename" = "noble" ]] && codename=jammy
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu $codename/mongodb-org/7.0 multiverse" \
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] $MONGO_BASE $MONGO_DIST/mongodb-org/7.0 $MONGO_COMP" \
             > /etc/apt/sources.list.d/mongodb-org-7.0.list
         apt-get update -qq
-        apt-get install -y -qq mongodb-org >/dev/null
+        apt-get install -y -qq mongodb-org >/dev/null \
+            || die "MongoDB install failed. Re-run with: sudo INSTALL_MONGO=no MONGO_URL_OVERRIDE='mongodb+srv://...' bash install-vps.sh"
     fi
     systemctl enable --now mongod
     ok "MongoDB running"
