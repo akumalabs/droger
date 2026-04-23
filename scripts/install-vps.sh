@@ -153,13 +153,21 @@ if ! id "$DEPLOY_USER" &>/dev/null; then
 fi
 
 # ----------------------------- Repo ---------------------------------------- #
+
 INSTALL_DIR="/opt/dm"
 
 mkdir -p "$INSTALL_DIR"
 chown -R "$DEPLOY_USER":"$DEPLOY_USER" "$INSTALL_DIR"
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-    sudo -u "$DEPLOY_USER" git -C "$INSTALL_DIR" pull
+    log "Updating repo (hard reset mode)"
+
+    sudo -u "$DEPLOY_USER" bash -c "
+        cd $INSTALL_DIR
+        git fetch --all
+        git reset --hard origin/$REPO_BRANCH
+        git clean -fd
+    "
 else
     sudo -u "$DEPLOY_USER" git clone "$REPO_URL" "$INSTALL_DIR"
 fi
