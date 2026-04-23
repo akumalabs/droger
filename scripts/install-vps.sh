@@ -195,15 +195,15 @@ pip install --upgrade pip
 pip install -r requirements.txt
 "
 
-# ----------------------------- Frontend (Vite Safe Build) ----------------------------- #
-log "Frontend setup (Vite stable mode)"
+# ----------------------------- Frontend (Vite Fully Stable) ----------------------------- #
+log "Frontend setup (Vite fully stable mode)"
 
 sudo -u "$DEPLOY_USER" bash -c '
 set -e
 
 cd '"$INSTALL_DIR/frontend"'
 
-echo "Cleaning old build..."
+echo "Cleaning previous build..."
 rm -rf node_modules package-lock.json yarn.lock dist
 
 export NODE_OPTIONS="--max-old-space-size=4096"
@@ -212,7 +212,7 @@ echo "Installing dependencies..."
 npm install --legacy-peer-deps
 
 # -------------------- FIX: PostCSS / Tailwind (ESM issue) --------------------
-echo "Fixing PostCSS/Tailwind config..."
+echo "Fixing PostCSS/Tailwind configs..."
 [ -f postcss.config.js ] && mv postcss.config.js postcss.config.cjs || true
 [ -f tailwind.config.js ] && mv tailwind.config.js tailwind.config.cjs || true
 
@@ -240,21 +240,21 @@ fi
 # -------------------- FIX: React entry --------------------
 if [ ! -f src/main.jsx ]; then
 cat > src/main.jsx <<EOF
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import "./index.css";
+import React from "react"
+import ReactDOM from "react-dom/client"
+import App from "./App"
+import "./index.css"
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
-);
+)
 EOF
 fi
 
-# -------------------- FIX: JSX conversion (SAFE - no pipes, no unbound vars) --------------------
-echo "Fixing JSX file extensions..."
+# -------------------- FIX: JSX extension conversion (SAFE) --------------------
+echo "Fixing JSX extensions..."
 
 find src -type f -name "*.js" -print 2>/dev/null | while read file; do
   [ -z "$file" ] && continue
@@ -264,15 +264,23 @@ find src -type f -name "*.js" -print 2>/dev/null | while read file; do
   fi
 done || true
 
+# -------------------- FIX: Alias (@/) conversion --------------------
+echo "Fixing alias imports (@/ → relative paths)..."
+
+find src -type f \( -name "*.js" -o -name "*.jsx" \) -print 2>/dev/null | while read file; do
+  [ -z "$file" ] && continue
+  sed -i "s#@/#./#g" "$file" 2>/dev/null || true
+done || true
+
 # -------------------- Vite config --------------------
 if [ ! -f vite.config.js ]; then
 cat > vite.config.js <<EOF
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite"
+import react from "@vitejs/plugin-react"
 
 export default defineConfig({
   plugins: [react()],
-});
+})
 EOF
 fi
 
@@ -286,7 +294,7 @@ echo "Building frontend..."
 npm run build
 '
 
-ok "Frontend build completed"
+ok "Frontend build completed successfully"
 
 # ----------------------------- Supervisor ---------------------------------- #
 cat > /etc/supervisor/conf.d/dm.conf <<EOF
