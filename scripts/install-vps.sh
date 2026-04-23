@@ -213,9 +213,11 @@ log "Frontend build"
 
 sudo -u "$DEPLOY_USER" bash -c "
 cd $INSTALL_DIR/frontend
+
 echo 'REACT_APP_BACKEND_URL=https://$DOMAIN' > .env
-yarn install --silent
-yarn build
+
+npm install
+npm run build
 "
 
 # ----------------------------- Supervisor ---------------------------------- #
