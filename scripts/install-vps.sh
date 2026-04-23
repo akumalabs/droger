@@ -216,7 +216,7 @@ cd $INSTALL_DIR/frontend
 
 echo 'REACT_APP_BACKEND_URL=https://$DOMAIN' > .env
 
-npm install
+npm install --legacy-peer-deps
 npm run build
 "
 
