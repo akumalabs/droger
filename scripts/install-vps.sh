@@ -1,30 +1,8 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Droplet Manager — one-shot VPS installer (Ubuntu 22.04 / Debian 12)
-# =============================================================================
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/<you>/<repo>/main/scripts/install-vps.sh | sudo bash
-#
-# Or after cloning:
-#   sudo bash scripts/install-vps.sh
-#
-# Fully non-interactive (for CI / cloud-init):
-#   sudo DOMAIN=dm.example.com \
-#        ADMIN_EMAIL=admin@example.com \
-#        ADMIN_PASSWORD=changeme123 \
-#        RESEND_API_KEY=re_xxx \
-#        SENDER_EMAIL=no-reply@example.com \
-#        REPO_URL=https://github.com/you/repo.git \
-#        SSL_EMAIL=me@example.com \
-#        ASSUME_YES=1 \
-#        bash scripts/install-vps.sh
-# =============================================================================
-
-#!/usr/bin/env bash
 set -Eeuo pipefail
 
 # =============================================================================
-# Droplet Manager — Production VPS Installer (Fixed + Stateful + Safe)
+# Droplet Manager — Production VPS Installer (Vite + Stable)
 # =============================================================================
 
 # ----------------------------- Colors -------------------------------------- #
@@ -42,7 +20,10 @@ die() { echo -e "${RED}✗ $*${RESET}" >&2; exit 1; }
 
 trap 'die "Failed at line $LINENO. Check logs."' ERR
 
-# ----------------------------- Reset mode ---------------------------------- #
+# ----------------------------- Safety -------------------------------------- #
+export DEBIAN_FRONTEND=noninteractive
+export NODE_OPTIONS="--max-old-space-size=4096"
+
 STATE_FILE="/var/lib/dm-installer.env"
 
 if [[ "${1:-}" == "--reset" ]]; then
@@ -62,7 +43,7 @@ esac
 
 # ----------------------------- Load state ---------------------------------- #
 if [[ -f "$STATE_FILE" ]]; then
-    log "Loading previous install state"
+    log "Loading previous state"
     set -a
     source "$STATE_FILE"
     set +a
@@ -80,7 +61,7 @@ ask() {
         return
     fi
 
-    [[ -e /dev/tty ]] || die "$var required (no TTY)"
+    [[ -e /dev/tty ]] || die "$var required"
 
     if [[ "$secret" == "1" ]]; then
         read -srp "$prompt${default:+ [$default]}: " val < /dev/tty; echo
@@ -88,8 +69,7 @@ ask() {
         read -rp "$prompt${default:+ [$default]}: " val < /dev/tty
     fi
 
-    val="${val:-$default}"
-    printf -v "$var" '%s' "$val"
+    printf -v "$var" '%s' "${val:-$default}"
 }
 
 # ----------------------------- Config -------------------------------------- #
@@ -107,8 +87,6 @@ ask INSTALL_MONGO "Install MongoDB? (yes/no)" "yes"
 ask MONGO_URL_OVERRIDE "MongoDB URI (if no MongoDB)" ""
 
 # ----------------------------- Save state ---------------------------------- #
-log "Saving state"
-
 mkdir -p "$(dirname "$STATE_FILE")"
 
 cat > "$STATE_FILE" <<EOF
@@ -125,23 +103,25 @@ MONGO_URL_OVERRIDE="$MONGO_URL_OVERRIDE"
 EOF
 
 chmod 600 "$STATE_FILE"
+
 ok "State saved"
 
 # ----------------------------- System deps --------------------------------- #
 log "Installing system packages"
 
-export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq \
     git curl nginx supervisor ufw \
-    python3 python3-venv python3-full python3-pip \
+    python3 python3-venv python3-pip python3-full \
     build-essential >/dev/null
 
-# Node
+# Node 20
 if ! command -v node &>/dev/null || [[ "$(node -v | cut -c2- | cut -d. -f1)" -lt 20 ]]; then
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
     apt-get install -y -qq nodejs >/dev/null
 fi
+
+npm config set legacy-peer-deps true
 
 # ----------------------------- MongoDB ------------------------------------- #
 if [[ "$INSTALL_MONGO" == "yes" ]]; then
@@ -155,6 +135,7 @@ https://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" \
         apt-get update -qq
         apt-get install -y -qq mongodb-org >/dev/null || true
     fi
+
     systemctl enable --now mongod || true
     MONGO_URL="mongodb://localhost:27017"
 else
@@ -163,7 +144,7 @@ fi
 
 [[ -n "$MONGO_URL" ]] || die "MongoDB URL missing"
 
-# ----------------------------- Deploy user --------------------------------- #
+# ----------------------------- User ---------------------------------------- #
 DEPLOY_USER="deploy"
 
 if ! id "$DEPLOY_USER" &>/dev/null; then
@@ -186,9 +167,7 @@ fi
 # ----------------------------- Backend ------------------------------------- #
 log "Backend setup"
 
-ENV_FILE="$INSTALL_DIR/backend/.env"
-
-cat > "$ENV_FILE" <<EOF
+cat > "$INSTALL_DIR/backend/.env" <<EOF
 MONGO_URL="$MONGO_URL"
 DB_NAME="dm"
 DOMAIN="$DOMAIN"
@@ -198,7 +177,7 @@ RESEND_API_KEY="$RESEND_API_KEY"
 SENDER_EMAIL="$SENDER_EMAIL"
 EOF
 
-chown "$DEPLOY_USER":"$DEPLOY_USER" "$ENV_FILE"
+chown "$DEPLOY_USER":"$DEPLOY_USER" "$INSTALL_DIR/backend/.env"
 
 sudo -u "$DEPLOY_USER" bash -c "
 cd $INSTALL_DIR/backend
@@ -208,17 +187,24 @@ pip install --upgrade pip
 pip install -r requirements.txt
 "
 
-# ----------------------------- Frontend ------------------------------------ #
-log "Frontend build"
+# ----------------------------- Frontend (Vite) ----------------------------- #
+log "Frontend setup (Vite)"
 
 sudo -u "$DEPLOY_USER" bash -c "
 cd $INSTALL_DIR/frontend
 
-echo 'REACT_APP_BACKEND_URL=https://$DOMAIN' > .env
+rm -rf node_modules package-lock.json dist
 
 npm install --legacy-peer-deps
+
+cat > .env <<EOF
+VITE_BACKEND_URL=https://$DOMAIN
+EOF
+
 npm run build
 "
+
+ok "Frontend built"
 
 # ----------------------------- Supervisor ---------------------------------- #
 cat > /etc/supervisor/conf.d/dm.conf <<EOF
@@ -241,10 +227,13 @@ server {
     listen 80;
     server_name $DOMAIN;
 
-    root $INSTALL_DIR/frontend/build;
+    root $INSTALL_DIR/frontend/dist;
+    index index.html;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8001;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
     }
 
     location / {
@@ -256,6 +245,6 @@ EOF
 ln -sf /etc/nginx/sites-available/dm /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 
-# ----------------------------- Finish -------------------------------------- #
+# ----------------------------- Done ---------------------------------------- #
 ok "Deployment complete"
 echo "https://$DOMAIN"
