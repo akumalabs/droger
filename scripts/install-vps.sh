@@ -205,10 +205,48 @@ rm -rf node_modules package-lock.json dist
 
 npm install --legacy-peer-deps
 
+# ---- AUTO FIX CRA → VITE ----
+if [[ ! -f index.html ]]; then
+    echo 'Fixing CRA → Vite structure...'
+
+    if [[ -f public/index.html ]]; then
+        cp public/index.html index.html
+    fi
+
+    sed -i 's#<div id=\"root\"></div>#<div id=\"root\"></div>\n<script type=\"module\" src=\"/src/main.jsx\"></script>#' index.html || true
+
+    cat > src/main.jsx <<EOF
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+EOF
+
+    rm -f src/index.js src/index.tsx 2>/dev/null || true
+fi
+
+# ---- VITE CONFIG ----
+cat > vite.config.js <<EOF
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()]
+})
+EOF
+
+# ---- ENV ----
 cat > .env <<EOF
 VITE_BACKEND_URL=https://$DOMAIN
 EOF
 
+# ---- BUILD ----
 npm run build
 "
 
