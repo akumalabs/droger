@@ -55,18 +55,11 @@ esac
 
 generate_hex() {
   local size="$1"
-  python3 - <<PY
-import secrets
-print(secrets.token_hex(${size}))
-PY
+  od -An -N"$size" -tx1 /dev/urandom | tr -d ' \n'
 }
 
 generate_fernet_key() {
-  python3 - <<'PY'
-import os
-import base64
-print(base64.urlsafe_b64encode(os.urandom(32)).decode())
-PY
+  head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n'
 }
 
 sql_escape() {
