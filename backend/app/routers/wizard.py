@@ -30,15 +30,6 @@ class DeployWizardReq(BaseModel):
 class ReinstallReq(BaseModel):
     token_id: str
     windows_version: str
-    rdp_password: str = Field(min_length=6, max_length=64)
-    rdp_port: int = 3389
-
-    @field_validator("rdp_port")
-    @classmethod
-    def validate_port(cls, value: int) -> int:
-        if not 1 <= value <= 65535:
-            raise ValueError("RDP port must be between 1 and 65535")
-        return value
 
 
 @router.post("/deploy-windows")
@@ -75,8 +66,6 @@ async def reinstall_windows(
         token_id=payload.token_id,
         droplet_id=droplet_id,
         windows_version=payload.windows_version,
-        rdp_password=payload.rdp_password,
-        rdp_port=payload.rdp_port,
     )
 
 

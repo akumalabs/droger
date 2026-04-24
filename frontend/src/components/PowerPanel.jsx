@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api, getActiveTokenId } from "../lib/api";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import {
   Select,
@@ -88,20 +87,10 @@ const ACTIONS = [
   },
 ];
 
-function randomPw() {
-  const chars =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  let p = "";
-  for (let i = 0; i < 12; i++) p += chars[Math.floor(Math.random() * chars.length)];
-  return p + "!1";
-}
-
-export default function PowerPanel({ droplet, onChanged }) {
+export default function PowerPanel({ droplet, onChanged, onReinstallStarted }) {
   const [pending, setPending] = useState(null);
   const [versions, setVersions] = useState([]);
   const [reinstallVersion, setReinstallVersion] = useState("win2022");
-  const [reinstallPassword, setReinstallPassword] = useState(randomPw());
-  const [reinstallPort, setReinstallPort] = useState(3389);
 
   useEffect(() => {
     (async () => {
@@ -128,20 +117,14 @@ export default function PowerPanel({ droplet, onChanged }) {
           toast.error("No active token selected");
           return;
         }
-        const port = Number(reinstallPort);
-        if (!reinstallPassword || reinstallPassword.length < 6) {
-          toast.error("RDP password must be at least 6 chars");
-          return;
-        }
-        if (!port || port < 1 || port > 65535) {
-          toast.error("RDP port must be between 1 and 65535");
-          return;
-        }
-        await api.post(`/wizard/reinstall/${droplet.id}`, {
+        const { data } = await api.post(`/wizard/reinstall/${droplet.id}`, {
           token_id: tokenId,
           windows_version: reinstallVersion,
-          rdp_password: reinstallPassword,
-          rdp_port: port,
+        });
+        onReinstallStarted?.({
+          windowsVersion: data.windows_version || reinstallVersion,
+          rdpPassword: data.rdp_password,
+          rdpPort: data.rdp_port,
         });
       } else {
         await api.post(`/do/droplets/${droplet.id}/actions`, {
@@ -222,33 +205,9 @@ export default function PowerPanel({ droplet, onChanged }) {
                   </SelectContent>
                 </Select>
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="RDP Password">
-                  <Input
-                    type="text"
-                    value={reinstallPassword}
-                    onChange={(e) => setReinstallPassword(e.target.value)}
-                    className="bg-black border-white/10 rounded-none font-mono"
-                  />
-                </Field>
-                <Field label="RDP Port">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={reinstallPort}
-                    onChange={(e) => setReinstallPort(e.target.value)}
-                    className="bg-black border-white/10 rounded-none font-mono"
-                  />
-                </Field>
+              <div className="text-xs text-neutral-400 font-mono">
+                Reinstall reuses the last saved RDP password and port; they are shown in droplet details.
               </div>
-              <Button
-                variant="outline"
-                onClick={() => setReinstallPassword(randomPw())}
-                className="rounded-none border-white/10"
-              >
-                Regenerate Password
-              </Button>
             </div>
           )}
 

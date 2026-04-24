@@ -5,7 +5,7 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core import security
+from app.core import security, crypto
 from app.models import WizardJob
 from . import do_service
 from .token_service import resolve_token
@@ -13,6 +13,23 @@ from .windows import build_windows_user_data
 
 DO_API_BASE = "https://api.digitalocean.com/v2"
 DEFAULT_WIZARD_IMAGE = "debian-13-x64"
+PASSWORD_BLOB_PREFIX = "[encpw]"
+
+
+def _password_blob(password: str) -> str:
+    return PASSWORD_BLOB_PREFIX + crypto.encrypt(password)
+
+
+def _password_from_blob(blob: str | None) -> str | None:
+    if not blob or not blob.startswith(PASSWORD_BLOB_PREFIX):
+        return None
+    encrypted = blob[len(PASSWORD_BLOB_PREFIX):]
+    if not encrypted:
+        return None
+    try:
+        return crypto.decrypt(encrypted)
+    except Exception:
+        return None
 
 
 async def deploy_windows(
@@ -62,7 +79,7 @@ async def deploy_windows(
         droplet_id=droplet.get("id"),
         windows_version=windows_version,
         rdp_port=rdp_port,
-        command="[hidden:auto-executed-via-user-data]",
+        command=_password_blob(rdp_password),
         created_at=datetime.now(timezone.utc),
     )
     db.add(job)
@@ -101,7 +118,25 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
         "droplet_status": droplet.get("status"),
         "progress_ready": False,
         "log_tail": "",
+        "windows_version": None,
+        "rdp_port": None,
+        "rdp_password": None,
     }
+    latest_job = await db.scalar(
+        select(WizardJob)
+        .where(
+            WizardJob.user_id == user_id,
+            WizardJob.token_id == token_id,
+            WizardJob.droplet_id == droplet_id,
+        )
+        .order_by(WizardJob.created_at.desc())
+        .limit(1)
+    )
+    if latest_job:
+        response["windows_version"] = latest_job.windows_version
+        response["rdp_port"] = latest_job.rdp_port
+        response["rdp_password"] = _password_from_blob(latest_job.command)
+
     if not public_ip:
         return response
     if not re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", public_ip):
@@ -127,8 +162,6 @@ async def reinstall_windows(
     token_id: str,
     droplet_id: int,
     windows_version: str,
-    rdp_password: str,
-    rdp_port: int,
 ) -> dict:
     token = await resolve_token(db, user_id, token_id)
     payload = await do_service.do_request("GET", f"/droplets/{droplet_id}", token)
@@ -140,7 +173,25 @@ async def reinstall_windows(
     if droplet.get("status") != "off":
         raise HTTPException(status_code=409, detail="Droplet must be powered off before rebuild")
 
-    user_data = build_windows_user_data(windows_version, rdp_password, rdp_port)
+    latest_job = await db.scalar(
+        select(WizardJob)
+        .where(
+            WizardJob.user_id == user_id,
+            WizardJob.token_id == token_id,
+            WizardJob.droplet_id == droplet_id,
+        )
+        .order_by(WizardJob.created_at.desc())
+        .limit(1)
+    )
+    if not latest_job:
+        raise HTTPException(status_code=404, detail="No previous Windows deploy job found for this droplet")
+
+    stored_password = _password_from_blob(latest_job.command)
+    if not stored_password:
+        raise HTTPException(status_code=409, detail="Stored RDP password unavailable for this droplet")
+
+    rdp_port = latest_job.rdp_port
+    user_data = build_windows_user_data(windows_version, stored_password, rdp_port)
     action_response = await do_service.do_request(
         "POST",
         f"/droplets/{droplet_id}/actions",
@@ -159,7 +210,7 @@ async def reinstall_windows(
         droplet_id=droplet_id,
         windows_version=windows_version,
         rdp_port=rdp_port,
-        command="[hidden:auto-reinstall-via-rebuild]",
+        command=_password_blob(stored_password),
         created_at=datetime.now(timezone.utc),
     )
     db.add(job)
@@ -172,6 +223,7 @@ async def reinstall_windows(
         "image": DEFAULT_WIZARD_IMAGE,
         "windows_version": windows_version,
         "rdp_port": rdp_port,
+        "rdp_password": stored_password,
         "note": "Droplet rebuild to Debian 13 started with Windows auto-install.",
     }
 
