@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import asyncio
 import html
 import re
 import httpx
@@ -14,6 +15,8 @@ from .windows import build_windows_user_data
 DO_API_BASE = "https://api.digitalocean.com/v2"
 DEFAULT_WIZARD_IMAGE = "debian-13-x64"
 PASSWORD_BLOB_PREFIX = "[encpw]"
+INSTALL_READY_CONSECUTIVE_SUCCESSES = 2
+_install_probe_successes: dict[str, int] = {}
 
 
 def _password_blob(password: str) -> str:
@@ -30,6 +33,39 @@ def _password_from_blob(blob: str | None) -> str | None:
         return crypto.decrypt(encrypted)
     except Exception:
         return None
+
+
+def _probe_key(user_id: str, token_id: str, droplet_id: int) -> str:
+    return f"{user_id}:{token_id}:{droplet_id}"
+
+
+async def _ping_host(host: str, timeout_sec: float = 1.5) -> bool:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ping",
+            "-c",
+            "1",
+            "-W",
+            str(int(timeout_sec)),
+            host,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=timeout_sec + 1.0)
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+async def _tcp_open(host: str, port: int, timeout_sec: float = 1.5) -> bool:
+    try:
+        conn = asyncio.open_connection(host, port)
+        reader, writer = await asyncio.wait_for(conn, timeout=timeout_sec)
+        writer.close()
+        await writer.wait_closed()
+        return True
+    except Exception:
+        return False
 
 
 async def deploy_windows(
@@ -123,6 +159,10 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
         "windows_version": None,
         "rdp_port": None,
         "rdp_password": None,
+        "ping_ok": False,
+        "rdp_open": False,
+        "install_complete": False,
+        "install_message": "",
     }
     latest_job = await db.scalar(
         select(WizardJob)
@@ -134,15 +174,36 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
         .order_by(WizardJob.created_at.desc())
         .limit(1)
     )
+    probe_key = _probe_key(user_id, token_id, droplet_id)
     if latest_job:
         response["windows_version"] = latest_job.windows_version
         response["rdp_port"] = latest_job.rdp_port
         response["rdp_password"] = _password_from_blob(latest_job.command)
 
     if not public_ip:
+        _install_probe_successes.pop(probe_key, None)
         return response
     if not re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", public_ip):
+        _install_probe_successes.pop(probe_key, None)
         return response
+    rdp_port = response["rdp_port"]
+    if isinstance(rdp_port, int) and 1 <= rdp_port <= 65535:
+        ping_ok, rdp_open = await asyncio.gather(
+            _ping_host(public_ip),
+            _tcp_open(public_ip, rdp_port),
+        )
+        response["ping_ok"] = ping_ok
+        response["rdp_open"] = rdp_open
+        if ping_ok and rdp_open:
+            _install_probe_successes[probe_key] = _install_probe_successes.get(probe_key, 0) + 1
+            if _install_probe_successes[probe_key] >= INSTALL_READY_CONSECUTIVE_SUCCESSES:
+                response["install_complete"] = True
+                response["install_message"] = "Windows installation complete. You should be able to access it now."
+        else:
+            _install_probe_successes[probe_key] = 0
+    else:
+        _install_probe_successes.pop(probe_key, None)
+
     try:
         async with httpx.AsyncClient(timeout=4.0) as client:
             progress = await client.get(f"http://{public_ip}/")

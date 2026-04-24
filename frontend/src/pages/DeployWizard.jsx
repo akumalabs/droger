@@ -69,6 +69,10 @@ export default function DeployWizard() {
   const [progressLog, setProgressLog] = useState("");
   const [progressMode, setProgressMode] = useState("html");
   const [progressWsUrl, setProgressWsUrl] = useState("");
+  const [pingOk, setPingOk] = useState(false);
+  const [rdpOpen, setRdpOpen] = useState(false);
+  const [installComplete, setInstallComplete] = useState(false);
+  const [installMessage, setInstallMessage] = useState("");
   const [progressWaitSeconds, setProgressWaitSeconds] = useState(0);
   const pollRef = useRef(null);
 
@@ -111,6 +115,10 @@ export default function DeployWizard() {
         setProgressLog(data.log_tail || "");
         setProgressMode(data.log_mode || "html");
         setProgressWsUrl(data.ws_url || "");
+        setPingOk(Boolean(data.ping_ok));
+        setRdpOpen(Boolean(data.rdp_open));
+        setInstallComplete(Boolean(data.install_complete));
+        setInstallMessage(data.install_message || "");
       } catch {
       } finally {
         elapsed += 5;
@@ -123,6 +131,10 @@ export default function DeployWizard() {
     setProgressWaitSeconds(0);
     setProgressMode("html");
     setProgressWsUrl("");
+    setPingOk(false);
+    setRdpOpen(false);
+    setInstallComplete(false);
+    setInstallMessage("");
     poll();
     return () => {
       stopped = true;
@@ -458,6 +470,18 @@ export default function DeployWizard() {
                   with user <span className="font-mono">Administrator</span>.
                 </li>
               </ol>
+
+              {installComplete && (
+                <div className="text-xs text-green-400 font-mono border border-green-500/30 p-3">
+                  {installMessage || "Windows installation complete. You should be able to access it now."}
+                </div>
+              )}
+
+              {!installComplete && (
+                <div className="text-xs text-neutral-400 font-mono">
+                  Connectivity checks · ICMP: {pingOk ? "OK" : "waiting"} · RDP {result?.rdp_port || rdpPort}: {rdpOpen ? "OPEN" : "waiting"}
+                </div>
+              )}
 
               <div className="space-y-3">
                 <p className="overline">INSTALL LOG (LIVE)</p>
