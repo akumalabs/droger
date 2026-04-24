@@ -19,6 +19,7 @@ PASSWORD_BLOB_PREFIX = "[encpw]"
 INSTALL_READY_CONSECUTIVE_SUCCESSES = 2
 _install_probe_successes: dict[str, int] = {}
 _ws_log_cache: dict[str, list[str]] = {}
+ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
 
 
 def _password_blob(password: str) -> str:
@@ -73,9 +74,14 @@ async def _tcp_open(host: str, port: int, timeout_sec: float = 1.5) -> bool:
 def _append_ws_log(cache_key: str, message: str, limit: int = 200) -> str:
     lines = _ws_log_cache.get(cache_key, [])
     for line in (message or "").splitlines():
-        text = line.strip()
-        if text:
-            lines.append(text)
+        text = ANSI_ESCAPE_RE.sub("", line).strip()
+        if not text:
+            continue
+        if text == "***** START TRANS *****" and text in lines[-10:]:
+            continue
+        if lines and lines[-1] == text:
+            continue
+        lines.append(text)
     if len(lines) > limit:
         lines = lines[-limit:]
     _ws_log_cache[cache_key] = lines
@@ -90,20 +96,26 @@ async def _collect_ws_log_tail(public_ip: str, cache_key: str) -> str:
 
     uri = f"ws://{public_ip}/"
     deadline = time.monotonic() + 3.0
+    collected: list[str] = []
     try:
         async with websockets.connect(uri, open_timeout=2.0, close_timeout=1.0) as ws:
             while time.monotonic() < deadline:
-                timeout_left = max(0.2, deadline - time.monotonic())
+                timeout_left = max(0.1, deadline - time.monotonic())
                 try:
-                    payload = await asyncio.wait_for(ws.recv(), timeout=timeout_left)
+                    payload = await asyncio.wait_for(ws.recv(), timeout=min(0.4, timeout_left))
                     if isinstance(payload, bytes):
                         payload = payload.decode("utf-8", errors="ignore")
-                    return _append_ws_log(cache_key, str(payload))
+                    text = str(payload)
+                    if text:
+                        collected.append(text)
+                    if len(collected) >= 120:
+                        break
                 except Exception:
                     break
     except Exception:
         return _append_ws_log(cache_key, "")
-    return _append_ws_log(cache_key, "")
+
+    return _append_ws_log(cache_key, "\n".join(collected))
 
 
 async def deploy_windows(

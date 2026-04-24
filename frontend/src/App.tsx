@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard"
 import DropletDetail from "./pages/DropletDetail"
 import DeployWizard from "./pages/DeployWizard"
 import Settings from "./pages/Settings"
+import Templates from "./pages/Templates"
 import { Toaster } from "./components/ui/sonner"
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -59,6 +60,14 @@ function AppRouter() {
         element={
           <Protected>
             <Settings />
+          </Protected>
+        }
+      />
+      <Route
+        path="/templates"
+        element={
+          <Protected>
+            <Templates />
           </Protected>
         }
       />

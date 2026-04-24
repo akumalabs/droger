@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, getActiveTokenId } from "../lib/api";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "./ui/dialog";
 import {
   AlertDialog,
@@ -20,7 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { Camera, TrashSimple, ArrowCounterClockwise } from "@phosphor-icons/react";
+import { Camera, TrashSimple, ArrowCounterClockwise, CopySimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export default function SnapshotsPanel({ dropletId }) {
@@ -31,6 +33,11 @@ export default function SnapshotsPanel({ dropletId }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [confirmRestore, setConfirmRestore] = useState(null);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateSnap, setTemplateSnap] = useState(null);
+  const [templateLabel, setTemplateLabel] = useState("");
+  const [templateNotes, setTemplateNotes] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,6 +93,43 @@ export default function SnapshotsPanel({ dropletId }) {
     }
   };
 
+  const openSaveTemplate = (snap) => {
+    setTemplateSnap(snap);
+    setTemplateLabel(snap?.name || "");
+    setTemplateNotes("");
+    setSaveTemplateOpen(true);
+  };
+
+  const saveTemplate = async () => {
+    if (!templateSnap || !templateLabel.trim()) return;
+    const tokenId = getActiveTokenId();
+    if (!tokenId) {
+      toast.error("Select a DO token first");
+      return;
+    }
+
+    setSavingTemplate(true);
+    try {
+      await api.post("/templates/from-snapshot", {
+        token_id: tokenId,
+        snapshot_id: Number(templateSnap.id),
+        label: templateLabel.trim(),
+        notes: templateNotes.trim() || null,
+        source_droplet_id: Number(dropletId),
+        snapshot_name: templateSnap.name || null,
+      });
+      toast.success("Template saved");
+      setSaveTemplateOpen(false);
+      setTemplateSnap(null);
+      setTemplateLabel("");
+      setTemplateNotes("");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save template failed");
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -124,7 +168,16 @@ export default function SnapshotsPanel({ dropletId }) {
                 {s.size_gigabytes}GB
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openSaveTemplate(s)}
+                className="rounded-none border-white/10"
+                data-testid={`save-template-${s.id}`}
+              >
+                <CopySimple size={14} className="mr-1" /> Save as Template
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -182,6 +235,68 @@ export default function SnapshotsPanel({ dropletId }) {
               data-testid="confirm-create-snapshot"
             >
               {creating ? "Creating…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={saveTemplateOpen}
+        onOpenChange={(open) => {
+          setSaveTemplateOpen(open);
+          if (!open) {
+            setTemplateSnap(null);
+            setTemplateLabel("");
+            setTemplateNotes("");
+          }
+        }}
+      >
+        <DialogContent className="bg-[#0f0f10] border-white/10 rounded-none">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Save as template</DialogTitle>
+            <DialogDescription className="text-neutral-400">
+              {templateSnap
+                ? `Snapshot “${templateSnap.name}” will become reusable across accounts.`
+                : "Create a reusable template from this snapshot."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label className="overline">Label</Label>
+              <Input
+                value={templateLabel}
+                onChange={(e) => setTemplateLabel(e.target.value)}
+                placeholder="Windows baseline"
+                className="bg-black border-white/10 rounded-none font-mono"
+                data-testid="template-label"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="overline">Notes</Label>
+              <Textarea
+                value={templateNotes}
+                onChange={(e) => setTemplateNotes(e.target.value)}
+                placeholder="Patch level, software, credentials policy..."
+                className="bg-black border-white/10 rounded-none font-mono min-h-[90px]"
+                data-testid="template-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSaveTemplateOpen(false)}
+              className="rounded-none border-white/10"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveTemplate}
+              disabled={savingTemplate || !templateLabel.trim()}
+              className="rounded-none bg-white text-black hover:bg-neutral-200"
+              data-testid="confirm-save-template"
+            >
+              {savingTemplate ? "Saving…" : "Save Template"}
             </Button>
           </DialogFooter>
         </DialogContent>

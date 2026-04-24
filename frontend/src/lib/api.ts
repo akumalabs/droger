@@ -23,8 +23,9 @@ api.interceptors.request.use((cfg) => {
   const url = cfg.url || ""
   const needsToken = url.startsWith("/do/") && !url.startsWith("/do/windows-")
   if (needsToken) {
+    const hasTokenParam = Boolean(cfg.params && typeof cfg.params === "object" && "token_id" in cfg.params)
     const tid = getActiveTokenId()
-    if (tid) {
+    if (tid && !hasTokenParam) {
       cfg.params = { ...(cfg.params || {}), token_id: tid }
     }
   }
