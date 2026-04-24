@@ -289,6 +289,8 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
 else
   log "Cloning repository"
   rm -rf "$INSTALL_DIR"
+  install -d -m 755 "$INSTALL_DIR"
+  chown "$DEPLOY_USER":"$DEPLOY_USER" "$INSTALL_DIR"
   sudo -u "$DEPLOY_USER" git clone --branch "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
 fi
 
