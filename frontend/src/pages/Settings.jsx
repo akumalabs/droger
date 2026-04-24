@@ -1,7 +1,7 @@
 import React, { useState } from "react"
-import { useNavigate } from "react-router-dom"
 import TopNav from "../components/TopNav"
 import { useDOTokens } from "../context/DOTokenContext"
+import AddTokenDialog from "../components/AddTokenDialog"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import {
@@ -19,9 +19,9 @@ import { toast } from "sonner"
 
 export default function Settings() {
   const { tokens, active, select, renameToken, deleteToken } = useDOTokens()
+  const [addOpen, setAddOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
-  const navigate = useNavigate()
 
   const commitRename = async () => {
     if (!editing?.name.trim()) return
@@ -55,7 +55,7 @@ export default function Settings() {
 
         <div className="flex justify-end mb-4">
           <Button
-            onClick={() => navigate("/settings?add=1")}
+            onClick={() => setAddOpen(true)}
             data-testid="settings-add-token"
             className="rounded-none bg-white text-black hover:bg-neutral-200"
           >
@@ -137,6 +137,8 @@ export default function Settings() {
           ))}
         </div>
       </main>
+
+      <AddTokenDialog open={addOpen} onOpenChange={setAddOpen} />
 
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent className="bg-[#0f0f10] border-white/10 rounded-none">

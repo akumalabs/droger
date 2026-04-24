@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import security
 from app.models import WizardJob
 from .token_service import resolve_token
-from .windows import build_windows_command
+from .windows import build_windows_user_data
 
 DO_API_BASE = "https://api.digitalocean.com/v2"
 
@@ -24,6 +24,7 @@ async def deploy_windows(
     rdp_port: int,
 ) -> dict:
     token = await resolve_token(db, user_id, token_id)
+    user_data = build_windows_user_data(windows_version, rdp_password, rdp_port)
     body: dict[str, object] = {
         "name": name,
         "region": region,
@@ -32,7 +33,8 @@ async def deploy_windows(
         "backups": False,
         "ipv6": False,
         "monitoring": True,
-        "tags": ["droplet-manager", "windows-pending"],
+        "tags": ["droplet-manager", "windows-auto-install"],
+        "user_data": user_data,
     }
     if ssh_keys:
         body["ssh_keys"] = ssh_keys
@@ -49,7 +51,6 @@ async def deploy_windows(
             detail = response.text
         raise HTTPException(status_code=response.status_code, detail=detail or "DO error")
     droplet = response.json().get("droplet", {})
-    command = build_windows_command(windows_version, rdp_password, rdp_port)
     job = WizardJob(
         job_id=security.new_job_id(),
         user_id=user_id,
@@ -57,9 +58,14 @@ async def deploy_windows(
         droplet_id=droplet.get("id"),
         windows_version=windows_version,
         rdp_port=rdp_port,
-        command=command,
+        command="[hidden:auto-executed-via-user-data]",
         created_at=datetime.now(timezone.utc),
     )
     db.add(job)
     await db.commit()
-    return {"droplet": droplet, "command": command}
+    return {
+        "droplet": droplet,
+        "auto_install": True,
+        "windows_version": windows_version,
+        "rdp_port": rdp_port,
+    }

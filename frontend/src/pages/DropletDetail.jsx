@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import TopNav from "../components/TopNav";
 import StatusBadge from "../components/StatusBadge";
-import WindowsInstallPanel from "../components/WindowsInstallPanel";
 import SnapshotsPanel from "../components/SnapshotsPanel";
 import PowerPanel from "../components/PowerPanel";
 import { Button } from "../components/ui/button";
@@ -13,7 +12,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
-import { ArrowLeft, ArrowsClockwise, Terminal } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowsClockwise } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export default function DropletDetail() {
@@ -64,8 +63,6 @@ export default function DropletDetail() {
   const privateIp =
     droplet.networks?.v4?.find((n) => n.type === "private")?.ip_address || "—";
 
-  const consoleUrl = `https://cloud.digitalocean.com/droplets/${droplet.id}/terminal/ui`;
-
   return (
     <div className="min-h-screen bg-[#050505]">
       <TopNav />
@@ -104,14 +101,6 @@ export default function DropletDetail() {
             >
               <ArrowsClockwise size={16} className="mr-2" /> Refresh
             </Button>
-            <a href={consoleUrl} target="_blank" rel="noreferrer">
-              <Button
-                data-testid="open-console"
-                className="rounded-none bg-white text-black hover:bg-neutral-200"
-              >
-                <Terminal size={16} className="mr-2" weight="bold" /> Console
-              </Button>
-            </a>
           </div>
         </div>
 
@@ -135,9 +124,7 @@ export default function DropletDetail() {
           <TabsList className="bg-transparent border-b border-white/10 rounded-none h-auto p-0 w-full justify-start">
             {[
               ["power", "Power"],
-              ["reinstall", "Install Windows"],
               ["snapshots", "Snapshots"],
-              ["console", "Console"],
             ].map(([v, l]) => (
               <TabsTrigger
                 key={v}
@@ -153,14 +140,8 @@ export default function DropletDetail() {
           <TabsContent value="power" className="pt-6">
             <PowerPanel droplet={droplet} onChanged={load} />
           </TabsContent>
-          <TabsContent value="reinstall" className="pt-6">
-            <WindowsInstallPanel droplet={droplet} />
-          </TabsContent>
           <TabsContent value="snapshots" className="pt-6">
             <SnapshotsPanel dropletId={droplet.id} />
-          </TabsContent>
-          <TabsContent value="console" className="pt-6">
-            <ConsolePanel droplet={droplet} consoleUrl={consoleUrl} />
           </TabsContent>
         </Tabs>
       </main>
@@ -183,34 +164,3 @@ function Spec({ label, value, mono, accent }) {
   );
 }
 
-function ConsolePanel({ droplet, consoleUrl }) {
-  return (
-    <div className="border border-white/10 p-8 max-w-2xl">
-      <h3 className="font-heading text-2xl font-bold mb-2">DigitalOcean Recovery Console</h3>
-      <p className="text-sm text-neutral-400 mb-6">
-        Open the DigitalOcean web console to paste the Windows install command
-        or perform emergency recovery.
-      </p>
-      <div className="space-y-4 font-mono text-xs">
-        <div className="flex justify-between border-b border-white/10 py-2">
-          <span className="text-neutral-500">DROPLET ID</span>
-          <span>{droplet.id}</span>
-        </div>
-        <div className="flex justify-between border-b border-white/10 py-2">
-          <span className="text-neutral-500">PUBLIC IP</span>
-          <span className="text-accent-brand">
-            {droplet.networks?.v4?.find((n) => n.type === "public")?.ip_address || "—"}
-          </span>
-        </div>
-      </div>
-      <a href={consoleUrl} target="_blank" rel="noreferrer" className="block mt-6">
-        <Button
-          data-testid="console-open-btn"
-          className="rounded-none bg-white text-black hover:bg-neutral-200"
-        >
-          <Terminal size={16} className="mr-2" weight="bold" /> Open Console
-        </Button>
-      </a>
-    </div>
-  );
-}

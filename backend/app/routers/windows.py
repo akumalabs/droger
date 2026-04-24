@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from app.core.deps import current_user
-from app.services.windows import WINDOWS_VERSIONS, build_windows_command
+from app.services.windows import WINDOWS_VERSIONS
 
 router = APIRouter(prefix="/api/do", tags=["windows"])
 
@@ -31,5 +31,4 @@ async def windows_versions():
 
 @router.post("/windows-script")
 async def windows_script(payload: WindowsScriptReq, user=Depends(current_user)):
-    command = build_windows_command(payload.version, payload.password, payload.rdp_port)
-    return {"command": command, "version": payload.version, "rdp_port": payload.rdp_port}
+    raise HTTPException(status_code=403, detail="Manual Windows install command is disabled. Use deploy wizard auto-install.")

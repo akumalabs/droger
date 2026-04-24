@@ -17,8 +17,6 @@ import { toast } from "sonner";
 import {
   Rocket,
   AppWindow,
-  Terminal,
-  Copy,
   CircleNotch,
   CheckCircle,
   ArrowRight,
@@ -30,7 +28,7 @@ import StatusBadge from "../components/StatusBadge";
 const STEPS = [
   { key: 1, label: "Linux Droplet" },
   { key: 2, label: "Windows Config" },
-  { key: 3, label: "Deploy & Install" },
+  { key: 3, label: "Deploy & Auto Install" },
 ];
 
 function randomPw() {
@@ -66,7 +64,7 @@ export default function DeployWizard() {
 
   // Step 3
   const [deploying, setDeploying] = useState(false);
-  const [result, setResult] = useState(null); // {droplet, command}
+  const [result, setResult] = useState(null);
   const [droplet, setDroplet] = useState(null);
   const pollRef = useRef(null);
 
@@ -145,7 +143,7 @@ export default function DeployWizard() {
       setResult(data);
       setDroplet(data.droplet);
       setStep(3);
-      toast.success("Droplet creation started");
+      toast.success("Droplet creation started. Auto-install scheduled.");
     } catch (e) {
       toast.error(
         typeof e?.response?.data?.detail === "string"
@@ -468,61 +466,26 @@ export default function DeployWizard() {
               )}
               {droplet?.status === "active" && (
                 <div className="mt-4 flex items-center gap-2 text-xs font-mono text-green-400">
-                  <CheckCircle size={14} weight="fill" /> Droplet is active. Run
-                  the command below as root in the DigitalOcean console.
+                  <CheckCircle size={14} weight="fill" /> Droplet is active. Auto-install should already be running.
                 </div>
               )}
             </div>
 
             <div className="border border-white/10 p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="overline">WINDOWS INSTALL COMMAND</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(result.command);
-                    toast.success("Copied");
-                  }}
-                  className="rounded-none border-white/10"
-                  data-testid="w-copy"
-                >
-                  <Copy size={14} className="mr-1" /> Copy
-                </Button>
-              </div>
-              <pre
-                data-testid="w-command"
-                className="bg-black border border-white/10 p-4 text-xs font-mono text-green-400 whitespace-pre-wrap break-all max-h-72 overflow-auto"
-              >
-                {result.command}
-              </pre>
-              <ol className="text-sm text-neutral-300 list-decimal pl-5 space-y-1">
-                <li>Wait until droplet status is <span className="text-green-400">active</span>.</li>
-                <li>Open the DigitalOcean recovery console (button below).</li>
-                <li>Paste the command as root. Wait ~15 minutes.</li>
+              <p className="overline">AUTO INSTALL STATUS</p>
+              <ol className="text-sm text-neutral-300 list-decimal pl-5 space-y-2">
+                <li>The Windows install command is injected via cloud-init and runs automatically.</li>
+                <li>No console access is required and the command is not exposed in the UI/API response.</li>
+                <li>Wait about 10–20 minutes for install + reboot.</li>
                 <li>
-                  RDP to{" "}
+                  Connect via RDP to{" "}
                   <span className="font-mono text-accent-brand">
-                    {publicIp || "<ip>"}:{rdpPort}
+                    {publicIp || "<ip>"}:{result.rdp_port || rdpPort}
                   </span>{" "}
                   with user <span className="font-mono">Administrator</span>.
                 </li>
               </ol>
               <div className="flex gap-2">
-                <a
-                  href={`https://cloud.digitalocean.com/droplets/${droplet?.id || result.droplet.id}/terminal/ui`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Button
-                    data-testid="w-open-console"
-                    className="rounded-none"
-                    style={{ background: "#00E5FF", color: "#000" }}
-                    disabled={!droplet || droplet.status !== "active"}
-                  >
-                    <Terminal size={14} weight="bold" className="mr-2" /> Open DO Console
-                  </Button>
-                </a>
                 <Link to={`/droplets/${droplet?.id || result.droplet.id}`}>
                   <Button variant="outline" className="rounded-none border-white/10">
                     Open droplet detail

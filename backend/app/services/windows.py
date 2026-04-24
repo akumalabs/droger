@@ -1,3 +1,4 @@
+import base64
 from typing import Any
 from fastapi import HTTPException
 
@@ -63,3 +64,30 @@ def build_windows_command(version: str, password: str, rdp_port: int) -> str:
         f"bash reinstall.sh windows --image-name='{safe_img}' --iso='{iso}' "
         f"--password '{safe_pw}' --rdp-port {int(rdp_port)} --allow-ping && reboot"
     )
+
+
+def build_windows_user_data(version: str, password: str, rdp_port: int) -> str:
+    command = build_windows_command(version, password, rdp_port)
+    encoded = base64.b64encode(command.encode("utf-8")).decode("utf-8")
+    return """#!/bin/bash
+set -e
+LOG_FILE=/var/log/droger-autowin.log
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+ATTEMPTS=0
+until [ $ATTEMPTS -ge 24 ]
+do
+  if curl -fsS https://api.ipify.org >/dev/null 2>&1; then
+    break
+  fi
+  ATTEMPTS=$((ATTEMPTS + 1))
+  sleep 10
+done
+
+cat <<'EOF' >/root/.droger_autowin_cmd.b64
+""" + encoded + """
+EOF
+base64 -d /root/.droger_autowin_cmd.b64 >/root/.droger_autowin_cmd.sh
+chmod 700 /root/.droger_autowin_cmd.sh
+bash /root/.droger_autowin_cmd.sh
+"""
