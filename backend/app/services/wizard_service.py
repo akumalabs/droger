@@ -126,6 +126,9 @@ async def reinstall_windows(
     user_id: str,
     token_id: str,
     droplet_id: int,
+    windows_version: str,
+    rdp_password: str,
+    rdp_port: int,
 ) -> dict:
     token = await resolve_token(db, user_id, token_id)
     payload = await do_service.do_request("GET", f"/droplets/{droplet_id}", token)
@@ -137,19 +140,39 @@ async def reinstall_windows(
     if droplet.get("status") != "off":
         raise HTTPException(status_code=409, detail="Droplet must be powered off before rebuild")
 
+    user_data = build_windows_user_data(windows_version, rdp_password, rdp_port)
     action_response = await do_service.do_request(
         "POST",
         f"/droplets/{droplet_id}/actions",
         token,
-        json_body={"type": "rebuild", "image": DEFAULT_WIZARD_IMAGE},
+        json_body={
+            "type": "rebuild",
+            "image": DEFAULT_WIZARD_IMAGE,
+            "user_data": user_data,
+        },
     )
+
+    job = WizardJob(
+        job_id=security.new_job_id(),
+        user_id=user_id,
+        token_id=token_id,
+        droplet_id=droplet_id,
+        windows_version=windows_version,
+        rdp_port=rdp_port,
+        command="[hidden:auto-reinstall-via-rebuild]",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    await db.commit()
 
     return {
         "ok": True,
         "droplet_id": droplet_id,
         "action": action_response.get("action", action_response),
         "image": DEFAULT_WIZARD_IMAGE,
-        "note": "Droplet rebuild to Debian 13 started.",
+        "windows_version": windows_version,
+        "rdp_port": rdp_port,
+        "note": "Droplet rebuild to Debian 13 started with Windows auto-install.",
     }
 
 

@@ -239,21 +239,14 @@ export default function DeployWizard() {
 
         {step === 1 && (
           <div className="space-y-5 border border-white/10 p-6">
-            <Row>
-              <Field label="Droplet name">
-                <Input
-                  data-testid="w-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="bg-black border-white/10 rounded-none font-mono"
-                />
-              </Field>
-              <Field label="Linux base image">
-                <div className="h-10 px-3 border border-white/10 bg-black rounded-none flex items-center text-sm text-neutral-300 font-mono">
-                  Debian 13 x64 (fixed)
-                </div>
-              </Field>
-            </Row>
+            <Field label="Droplet name">
+              <Input
+                data-testid="w-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="bg-black border-white/10 rounded-none font-mono"
+              />
+            </Field>
 
             <Row>
               <Field label="Region">
