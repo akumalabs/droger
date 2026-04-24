@@ -27,8 +27,6 @@ export default function DropletDetail() {
   const [reinstallState, setReinstallState] = useState(null);
   const [progressReady, setProgressReady] = useState(false);
   const [progressLog, setProgressLog] = useState("");
-  const [progressMode, setProgressMode] = useState("html");
-  const [progressWsUrl, setProgressWsUrl] = useState("");
   const [pingOk, setPingOk] = useState(false);
   const [rdpOpen, setRdpOpen] = useState(false);
   const [installComplete, setInstallComplete] = useState(false);
@@ -69,8 +67,6 @@ export default function DropletDetail() {
           });
           setProgressReady(Boolean(data.progress_ready));
           setProgressLog(data.log_tail || "");
-          setProgressMode(data.log_mode || "html");
-          setProgressWsUrl(data.ws_url || "");
           setPingOk(Boolean(data.ping_ok));
           setRdpOpen(Boolean(data.rdp_open));
           setInstallComplete(Boolean(data.install_complete));
@@ -95,8 +91,6 @@ export default function DropletDetail() {
         setDroplet(data.droplet || null);
         setProgressReady(Boolean(data.progress_ready));
         setProgressLog(data.log_tail || "");
-        setProgressMode(data.log_mode || "html");
-        setProgressWsUrl(data.ws_url || "");
         setPingOk(Boolean(data.ping_ok));
         setRdpOpen(Boolean(data.rdp_open));
         setInstallComplete(Boolean(data.install_complete));
@@ -112,8 +106,6 @@ export default function DropletDetail() {
     };
     setProgressReady(false);
     setProgressLog("");
-    setProgressMode("html");
-    setProgressWsUrl("");
     setPingOk(false);
     setRdpOpen(false);
     setInstallComplete(false);
@@ -249,12 +241,6 @@ export default function DropletDetail() {
             {progressReady && (
               <div className="text-xs text-green-400 font-mono flex items-center gap-2">
                 <CheckCircle size={14} weight="fill" /> Progress logs are live.
-              </div>
-            )}
-            {progressReady && progressMode === "ws" && (
-              <div className="text-xs text-accent-brand font-mono">
-                This installer streams logs via websocket in browser. Open {`http://${publicIp}/`} to watch live output.
-                {progressWsUrl ? ` (${progressWsUrl})` : ""}
               </div>
             )}
 

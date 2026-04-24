@@ -67,8 +67,6 @@ export default function DeployWizard() {
   const [droplet, setDroplet] = useState(null);
   const [progressReady, setProgressReady] = useState(false);
   const [progressLog, setProgressLog] = useState("");
-  const [progressMode, setProgressMode] = useState("html");
-  const [progressWsUrl, setProgressWsUrl] = useState("");
   const [pingOk, setPingOk] = useState(false);
   const [rdpOpen, setRdpOpen] = useState(false);
   const [installComplete, setInstallComplete] = useState(false);
@@ -113,8 +111,6 @@ export default function DeployWizard() {
         setDroplet(data.droplet || null);
         setProgressReady(Boolean(data.progress_ready));
         setProgressLog(data.log_tail || "");
-        setProgressMode(data.log_mode || "html");
-        setProgressWsUrl(data.ws_url || "");
         setPingOk(Boolean(data.ping_ok));
         setRdpOpen(Boolean(data.rdp_open));
         setInstallComplete(Boolean(data.install_complete));
@@ -129,8 +125,6 @@ export default function DeployWizard() {
       }
     };
     setProgressWaitSeconds(0);
-    setProgressMode("html");
-    setProgressWsUrl("");
     setPingOk(false);
     setRdpOpen(false);
     setInstallComplete(false);
@@ -453,23 +447,6 @@ export default function DeployWizard() {
             </div>
 
             <div className="border border-white/10 p-6 space-y-4">
-              <p className="overline">AUTO INSTALL STATUS</p>
-              <ol className="text-sm text-neutral-300 list-decimal pl-5 space-y-2">
-                <li>The Windows install command is injected via cloud-init and runs automatically.</li>
-                <li>No console access is required and the command is not exposed in the UI/API response.</li>
-                <li>
-                  Progress page: <span className="font-mono text-accent-brand">http://{publicIp || "<ip>"}/</span>
-                </li>
-                <li>Logs usually appear after 30–60 seconds once the progress server starts.</li>
-                <li>Wait about 10–20 minutes for install + reboot.</li>
-                <li>
-                  Connect via RDP to{" "}
-                  <span className="font-mono text-accent-brand">
-                    {publicIp || "<ip>"}:{result.rdp_port || rdpPort}
-                  </span>{" "}
-                  with user <span className="font-mono">Administrator</span>.
-                </li>
-              </ol>
 
               {installComplete && (
                 <div className="text-xs text-green-400 font-mono border border-green-500/30 p-3">
@@ -503,11 +480,6 @@ export default function DeployWizard() {
                 {progressReady && (
                   <div className="text-xs text-green-400 font-mono">
                     Progress logs are live.
-                  </div>
-                )}
-                {progressReady && progressMode === "ws" && (
-                  <div className="text-xs text-accent-brand font-mono">
-                    This installer streams logs via websocket in browser only. Open {`http://${publicIp || "<ip>"}/`} to watch live output.
                   </div>
                 )}
                 <pre

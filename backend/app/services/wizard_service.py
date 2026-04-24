@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import asyncio
 import html
 import re
+import time
 import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -17,6 +18,7 @@ DEFAULT_WIZARD_IMAGE = "debian-13-x64"
 PASSWORD_BLOB_PREFIX = "[encpw]"
 INSTALL_READY_CONSECUTIVE_SUCCESSES = 2
 _install_probe_successes: dict[str, int] = {}
+_ws_log_cache: dict[str, list[str]] = {}
 
 
 def _password_blob(password: str) -> str:
@@ -66,6 +68,42 @@ async def _tcp_open(host: str, port: int, timeout_sec: float = 1.5) -> bool:
         return True
     except Exception:
         return False
+
+
+def _append_ws_log(cache_key: str, message: str, limit: int = 200) -> str:
+    lines = _ws_log_cache.get(cache_key, [])
+    for line in (message or "").splitlines():
+        text = line.strip()
+        if text:
+            lines.append(text)
+    if len(lines) > limit:
+        lines = lines[-limit:]
+    _ws_log_cache[cache_key] = lines
+    return "\n".join(lines[-120:])
+
+
+async def _collect_ws_log_tail(public_ip: str, cache_key: str) -> str:
+    try:
+        import websockets
+    except Exception:
+        return _append_ws_log(cache_key, "")
+
+    uri = f"ws://{public_ip}/"
+    deadline = time.monotonic() + 3.0
+    try:
+        async with websockets.connect(uri, open_timeout=2.0, close_timeout=1.0) as ws:
+            while time.monotonic() < deadline:
+                timeout_left = max(0.2, deadline - time.monotonic())
+                try:
+                    payload = await asyncio.wait_for(ws.recv(), timeout=timeout_left)
+                    if isinstance(payload, bytes):
+                        payload = payload.decode("utf-8", errors="ignore")
+                    return _append_ws_log(cache_key, str(payload))
+                except Exception:
+                    break
+    except Exception:
+        return _append_ws_log(cache_key, "")
+    return _append_ws_log(cache_key, "")
 
 
 async def deploy_windows(
@@ -182,9 +220,11 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
 
     if not public_ip:
         _install_probe_successes.pop(probe_key, None)
+        _ws_log_cache.pop(probe_key, None)
         return response
     if not re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", public_ip):
         _install_probe_successes.pop(probe_key, None)
+        _ws_log_cache.pop(probe_key, None)
         return response
     rdp_port = response["rdp_port"]
     if isinstance(rdp_port, int) and 1 <= rdp_port <= 65535:
@@ -218,7 +258,7 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
             response["progress_ready"] = True
             response["log_mode"] = "ws"
             response["ws_url"] = f"ws://{public_ip}/"
-            response["log_tail"] = "Live reinstall logs are streamed via websocket from the droplet progress page."
+            response["log_tail"] = await _collect_ws_log_tail(public_ip, probe_key)
             return response
     except Exception:
         return response
