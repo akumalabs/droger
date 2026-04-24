@@ -211,14 +211,23 @@ run_smoke_checks() {
   health_local="$(curl -fsS --max-time 10 http://127.0.0.1:8001/api/health || true)"
   echo "$health_local" | grep -q '"ok"' || die "Backend health check failed at 127.0.0.1:8001"
 
-  local health_nginx
-  health_nginx="$(curl -fsS --max-time 10 -H "Host: $DOMAIN" http://127.0.0.1/api/health || true)"
-  echo "$health_nginx" | grep -q '"ok"' || die "Nginx proxy health check failed"
-
+  local nginx_http_code
+  nginx_http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -H "Host: $DOMAIN" http://127.0.0.1/api/health || true)"
   if [[ "$ENABLE_SSL" == "yes" ]]; then
-    local health_https
-    health_https="$(curl -fsS --max-time 10 "https://$DOMAIN/api/health" || true)"
-    echo "$health_https" | grep -q '"ok"' || warn "HTTPS health check failed; verify DNS/certificate"
+    case "$nginx_http_code" in
+      200|301|302|307|308) ;;
+      *) die "Nginx HTTP endpoint check failed (status $nginx_http_code)" ;;
+    esac
+
+    local health_https_local
+    health_https_local="$(curl -fsS --max-time 10 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/api/health" || true)"
+    echo "$health_https_local" | grep -q '"ok"' || die "Nginx HTTPS local check failed"
+
+    local health_https_external
+    health_https_external="$(curl -fsS --max-time 10 "https://$DOMAIN/api/health" || true)"
+    echo "$health_https_external" | grep -q '"ok"' || warn "External HTTPS health check failed; DNS may still be propagating"
+  else
+    [[ "$nginx_http_code" == "200" ]] || die "Nginx proxy health check failed (status $nginx_http_code)"
   fi
 
   ok "Smoke checks passed"
