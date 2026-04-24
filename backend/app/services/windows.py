@@ -69,10 +69,33 @@ def build_windows_command(version: str, password: str, rdp_port: int) -> str:
 def build_windows_user_data(version: str, password: str, rdp_port: int) -> str:
     command = build_windows_command(version, password, rdp_port)
     encoded = base64.b64encode(command.encode("utf-8")).decode("utf-8")
-    return """#!/bin/bash
+    return f"""#!/bin/bash
 set -e
 LOG_FILE=/var/log/droger-autowin.log
+PROGRESS_DIR=/var/www/droger-progress
 exec > >(tee -a "$LOG_FILE") 2>&1
+
+mkdir -p "$PROGRESS_DIR"
+cat <<'EOF' > "$PROGRESS_DIR/index.html"
+<html><body style="background:#050505;color:#e5e5e5;font-family:monospace;"><h3>Droger Windows auto-install</h3><p>Initializing...</p></body></html>
+EOF
+
+if command -v python3 >/dev/null 2>&1; then
+  nohup python3 -m http.server 80 --directory "$PROGRESS_DIR" >/var/log/droger-progress-http.log 2>&1 &
+fi
+
+(
+  while true; do
+    if [ -f "$LOG_FILE" ]; then
+      {{
+        echo '<html><body style="background:#050505;color:#e5e5e5;font-family:monospace;"><h3>Droger Windows auto-install</h3><pre>'
+        sed 's/&/\\&amp;/g; s/</\\&lt;/g' "$LOG_FILE"
+        echo '</pre></body></html>'
+      }} > "$PROGRESS_DIR/index.html"
+    fi
+    sleep 5
+  done
+) >/dev/null 2>&1 &
 
 ATTEMPTS=0
 until [ $ATTEMPTS -ge 24 ]
@@ -85,7 +108,7 @@ do
 done
 
 cat <<'EOF' >/root/.droger_autowin_cmd.b64
-""" + encoded + """
+{encoded}
 EOF
 base64 -d /root/.droger_autowin_cmd.b64 >/root/.droger_autowin_cmd.sh
 chmod 700 /root/.droger_autowin_cmd.sh

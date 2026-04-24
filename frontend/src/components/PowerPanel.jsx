@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { api } from "../lib/api";
+import { api, getActiveTokenId } from "../lib/api";
 import { Button } from "./ui/button";
 import {
   AlertDialog,
@@ -36,6 +36,14 @@ const ACTIONS = [
     desc: "Graceful restart of the droplet.",
     destructive: false,
     color: "#00E5FF",
+  },
+  {
+    key: "rebuild_debian13",
+    label: "Rebuild Debian 13",
+    icon: ArrowClockwise,
+    desc: "Reinstall droplet OS to Debian 13 x64.",
+    destructive: true,
+    color: "#FBBF24",
   },
   {
     key: "shutdown",
@@ -76,9 +84,20 @@ export default function PowerPanel({ droplet, onChanged }) {
 
   const run = async (actionKey) => {
     try {
-      await api.post(`/do/droplets/${droplet.id}/actions`, {
-        action_type: actionKey,
-      });
+      if (actionKey === "rebuild_debian13") {
+        const tokenId = getActiveTokenId();
+        if (!tokenId) {
+          toast.error("No active token selected");
+          return;
+        }
+        await api.post(`/wizard/reinstall/${droplet.id}`, {
+          token_id: tokenId,
+        });
+      } else {
+        await api.post(`/do/droplets/${droplet.id}/actions`, {
+          action_type: actionKey,
+        });
+      }
       toast.success(`${actionKey} initiated`);
       setTimeout(onChanged, 1500);
     } catch (e) {

@@ -6,6 +6,7 @@ import { useDOTokens } from "../context/DOTokenContext";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { Progress } from "../components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -16,20 +17,20 @@ import {
 import { toast } from "sonner";
 import {
   Rocket,
-  AppWindow,
   CircleNotch,
   CheckCircle,
-  ArrowRight,
   Eye,
   EyeSlash,
 } from "@phosphor-icons/react";
 import StatusBadge from "../components/StatusBadge";
 
 const STEPS = [
-  { key: 1, label: "Linux Droplet" },
-  { key: 2, label: "Windows Config" },
-  { key: 3, label: "Deploy & Auto Install" },
+  { key: 1, label: "Droplet Config" },
+  { key: 2, label: "Deployment" },
 ];
+
+const PROGRESS_LOG_MIN_WAIT = 30;
+const PROGRESS_LOG_MAX_WAIT = 60;
 
 function randomPw() {
   const chars =
@@ -48,10 +49,8 @@ export default function DeployWizard() {
   const [name, setName] = useState("win-box-01");
   const [region, setRegion] = useState("");
   const [size, setSize] = useState("");
-  const [image, setImage] = useState("ubuntu-22-04-x64");
   const [regions, setRegions] = useState([]);
   const [sizes, setSizes] = useState([]);
-  const [images, setImages] = useState([]);
   const [sshKeys, setSshKeys] = useState([]);
   const [selectedKeys, setSelectedKeys] = useState([]);
 
@@ -66,6 +65,9 @@ export default function DeployWizard() {
   const [deploying, setDeploying] = useState(false);
   const [result, setResult] = useState(null);
   const [droplet, setDroplet] = useState(null);
+  const [progressReady, setProgressReady] = useState(false);
+  const [progressLog, setProgressLog] = useState("");
+  const [progressWaitSeconds, setProgressWaitSeconds] = useState(0);
   const pollRef = useRef(null);
 
   const hasToken = !!active;
@@ -75,16 +77,14 @@ export default function DeployWizard() {
     if (!active) return;
     (async () => {
       try {
-        const [r, s, i, k, v] = await Promise.all([
+        const [r, s, k, v] = await Promise.all([
           api.get("/do/regions"),
           api.get("/do/sizes"),
-          api.get("/do/images"),
           api.get("/do/ssh_keys"),
           api.get("/do/windows-versions"),
         ]);
         setRegions((r.data.regions || []).filter((x) => x.available));
         setSizes((s.data.sizes || []).filter((x) => x.available));
-        setImages(r.data ? i.data.images || [] : []);
         setSshKeys(k.data.ssh_keys || []);
         setVersions(v.data.versions || []);
       } catch {
@@ -93,28 +93,36 @@ export default function DeployWizard() {
     })();
   }, [active?.id]);
 
-  // polling droplet status after deploy
+  // polling droplet + progress status after deploy
   useEffect(() => {
-    if (!result?.droplet?.id) return;
+    if (!result?.droplet?.id || !active?.id) return;
     const id = result.droplet.id;
     let stopped = false;
+    let elapsed = 0;
     const poll = async () => {
       try {
-        const { data } = await api.get(`/do/droplets/${id}`);
-        setDroplet(data.droplet);
-        if (!stopped && data.droplet.status !== "active") {
+        const { data } = await api.get(`/wizard/progress/${id}`, {
+          params: { token_id: active.id },
+        });
+        setDroplet(data.droplet || null);
+        setProgressReady(Boolean(data.progress_ready));
+        setProgressLog(data.log_tail || "");
+      } catch {
+      } finally {
+        elapsed += 5;
+        setProgressWaitSeconds(elapsed);
+        if (!stopped) {
           pollRef.current = setTimeout(poll, 5000);
         }
-      } catch {
-        pollRef.current = setTimeout(poll, 8000);
       }
     };
+    setProgressWaitSeconds(0);
     poll();
     return () => {
       stopped = true;
       if (pollRef.current) clearTimeout(pollRef.current);
     };
-  }, [result?.droplet?.id]);
+  }, [result?.droplet?.id, active?.id]);
 
   const availableSizes = useMemo(
     () => sizes.filter((s) => !region || s.regions.includes(region)),
@@ -134,7 +142,6 @@ export default function DeployWizard() {
         name,
         region,
         size,
-        image,
         ssh_keys: selectedKeys.length ? selectedKeys : null,
         windows_version: winVersion,
         rdp_password: rdpPassword,
@@ -142,7 +149,7 @@ export default function DeployWizard() {
       });
       setResult(data);
       setDroplet(data.droplet);
-      setStep(3);
+      setStep(2);
       toast.success("Droplet creation started. Auto-install scheduled.");
     } catch (e) {
       toast.error(
@@ -157,6 +164,15 @@ export default function DeployWizard() {
 
   const publicIp =
     droplet?.networks?.v4?.find((n) => n.type === "public")?.ip_address;
+
+  const progressEstimate = Math.min(
+    100,
+    Math.round((progressWaitSeconds / PROGRESS_LOG_MAX_WAIT) * 100),
+  );
+  const progressRemaining = Math.max(
+    0,
+    PROGRESS_LOG_MIN_WAIT - progressWaitSeconds,
+  );
 
   if (!hasToken) {
     return (
@@ -196,7 +212,7 @@ export default function DeployWizard() {
         </p>
 
         {/* stepper */}
-        <div className="grid grid-cols-3 gap-0 border border-white/10 mb-8">
+        <div className="grid grid-cols-2 gap-0 border border-white/10 mb-8">
           {STEPS.map((s) => (
             <div
               key={s.key}
@@ -232,25 +248,10 @@ export default function DeployWizard() {
                   className="bg-black border-white/10 rounded-none font-mono"
                 />
               </Field>
-              <Field label="Linux image (temporary — gets wiped)">
-                <Select value={image} onValueChange={setImage}>
-                  <SelectTrigger
-                    data-testid="w-image"
-                    className="bg-black border-white/10 rounded-none"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#0f0f10] border-white/10 rounded-none max-h-60">
-                    {images.map((img) => (
-                      <SelectItem
-                        key={img.slug || img.id}
-                        value={img.slug || String(img.id)}
-                      >
-                        {img.distribution} {img.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <Field label="Linux base image">
+                <div className="h-10 px-3 border border-white/10 bg-black rounded-none flex items-center text-sm text-neutral-300 font-mono">
+                  Debian 13 x64 (fixed)
+                </div>
               </Field>
             </Row>
 
@@ -292,53 +293,6 @@ export default function DeployWizard() {
                 </Select>
               </Field>
             </Row>
-
-            {sshKeys.length > 0 && (
-              <Field label={`SSH keys (optional — ${sshKeys.length})`}>
-                <div className="border border-white/10 p-3 max-h-36 overflow-y-auto space-y-2">
-                  {sshKeys.map((k) => (
-                    <label
-                      key={k.id}
-                      className="flex items-center gap-2 text-sm cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedKeys.includes(k.id)}
-                        onChange={() => toggleKey(k.id)}
-                        className="accent-accent-brand"
-                      />
-                      <span className="font-mono text-xs">{k.name}</span>
-                      <span className="text-neutral-500 text-xs truncate">
-                        {k.fingerprint}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={() => setStep(2)}
-                disabled={!name || !region || !size || !image}
-                data-testid="w-next-1"
-                className="rounded-none"
-                style={{ background: "#00E5FF", color: "#000" }}
-              >
-                Next: Windows <ArrowRight size={14} weight="bold" className="ml-2" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-5 border border-white/10 p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <AppWindow size={20} className="text-accent-brand" weight="fill" />
-              <h3 className="font-heading text-xl font-bold">
-                Windows install configuration
-              </h3>
-            </div>
 
             <Field label="Windows Version">
               <Select value={winVersion} onValueChange={setWinVersion}>
@@ -399,18 +353,34 @@ export default function DeployWizard() {
               </Field>
             </Row>
 
-            <div className="flex items-center justify-between pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setStep(1)}
-                className="rounded-none border-white/10"
-                data-testid="w-back-2"
-              >
-                Back
-              </Button>
+            {sshKeys.length > 0 && (
+              <Field label={`SSH keys (optional — ${sshKeys.length})`}>
+                <div className="border border-white/10 p-3 max-h-36 overflow-y-auto space-y-2">
+                  {sshKeys.map((k) => (
+                    <label
+                      key={k.id}
+                      className="flex items-center gap-2 text-sm cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedKeys.includes(k.id)}
+                        onChange={() => toggleKey(k.id)}
+                        className="accent-accent-brand"
+                      />
+                      <span className="font-mono text-xs">{k.name}</span>
+                      <span className="text-neutral-500 text-xs truncate">
+                        {k.fingerprint}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </Field>
+            )}
+
+            <div className="flex justify-end pt-2">
               <Button
                 onClick={deploy}
-                disabled={deploying || rdpPassword.length < 6}
+                disabled={deploying || !name || !region || !size || rdpPassword.length < 6}
                 data-testid="w-deploy"
                 className="rounded-none bg-white text-black hover:bg-neutral-200"
               >
@@ -428,7 +398,7 @@ export default function DeployWizard() {
           </div>
         )}
 
-        {step === 3 && result && (
+        {step === 2 && result && (
           <div className="space-y-6">
             <div className="border border-white/10 p-6">
               <p className="overline mb-3">DROPLET STATUS</p>
@@ -476,6 +446,10 @@ export default function DeployWizard() {
               <ol className="text-sm text-neutral-300 list-decimal pl-5 space-y-2">
                 <li>The Windows install command is injected via cloud-init and runs automatically.</li>
                 <li>No console access is required and the command is not exposed in the UI/API response.</li>
+                <li>
+                  Progress page: <span className="font-mono text-accent-brand">http://{publicIp || "<ip>"}/</span>
+                </li>
+                <li>Logs usually appear after 30–60 seconds once the progress server starts.</li>
                 <li>Wait about 10–20 minutes for install + reboot.</li>
                 <li>
                   Connect via RDP to{" "}
@@ -485,6 +459,37 @@ export default function DeployWizard() {
                   with user <span className="font-mono">Administrator</span>.
                 </li>
               </ol>
+
+              <div className="space-y-3">
+                <p className="overline">INSTALL LOG (LIVE)</p>
+                {!progressReady && (
+                  <div className="space-y-2">
+                    <div className="text-xs text-neutral-400 font-mono">
+                      Bootstrapping progress logs… usually visible in
+                      {` ${PROGRESS_LOG_MIN_WAIT}-${PROGRESS_LOG_MAX_WAIT}s`}.
+                      {progressRemaining > 0
+                        ? ` ~${progressRemaining}s remaining before first logs.`
+                        : " Checking every 5s for first output."}
+                    </div>
+                    <Progress
+                      value={progressEstimate}
+                      className="h-1.5 rounded-none bg-white/10 [&>div]:bg-accent-brand"
+                    />
+                  </div>
+                )}
+                {progressReady && (
+                  <div className="text-xs text-green-400 font-mono">
+                    Progress logs are live.
+                  </div>
+                )}
+                <pre
+                  className="bg-black border border-white/10 p-3 text-xs font-mono text-green-400 whitespace-pre-wrap break-all max-h-64 overflow-auto"
+                  data-testid="wizard-progress-log"
+                >
+                  {progressLog || "No log output yet."}
+                </pre>
+              </div>
+
               <div className="flex gap-2">
                 <Link to={`/droplets/${droplet?.id || result.droplet.id}`}>
                   <Button variant="outline" className="rounded-none border-white/10">

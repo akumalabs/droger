@@ -13,6 +13,8 @@ def test_windows_versions_public(client):
 def test_windows_user_data_builder():
     user_data = build_windows_user_data("win11pro", "Test1234!", 33890)
     assert "droger-autowin.log" in user_data
+    assert "python3 -m http.server 80" in user_data
+    assert "droger-progress" in user_data
     assert "base64 -d" in user_data
     assert "bash /root/.droger_autowin_cmd.sh" in user_data
 
