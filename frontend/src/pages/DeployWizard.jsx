@@ -67,6 +67,8 @@ export default function DeployWizard() {
   const [droplet, setDroplet] = useState(null);
   const [progressReady, setProgressReady] = useState(false);
   const [progressLog, setProgressLog] = useState("");
+  const [progressMode, setProgressMode] = useState("html");
+  const [progressWsUrl, setProgressWsUrl] = useState("");
   const [progressWaitSeconds, setProgressWaitSeconds] = useState(0);
   const pollRef = useRef(null);
 
@@ -107,6 +109,8 @@ export default function DeployWizard() {
         setDroplet(data.droplet || null);
         setProgressReady(Boolean(data.progress_ready));
         setProgressLog(data.log_tail || "");
+        setProgressMode(data.log_mode || "html");
+        setProgressWsUrl(data.ws_url || "");
       } catch {
       } finally {
         elapsed += 5;
@@ -117,6 +121,8 @@ export default function DeployWizard() {
       }
     };
     setProgressWaitSeconds(0);
+    setProgressMode("html");
+    setProgressWsUrl("");
     poll();
     return () => {
       stopped = true;
@@ -473,6 +479,11 @@ export default function DeployWizard() {
                 {progressReady && (
                   <div className="text-xs text-green-400 font-mono">
                     Progress logs are live.
+                  </div>
+                )}
+                {progressReady && progressMode === "ws" && (
+                  <div className="text-xs text-accent-brand font-mono">
+                    This installer streams logs via websocket in browser only. Open {`http://${publicIp || "<ip>"}/`} to watch live output.
                   </div>
                 )}
                 <pre

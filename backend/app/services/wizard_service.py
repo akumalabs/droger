@@ -118,6 +118,8 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
         "droplet_status": droplet.get("status"),
         "progress_ready": False,
         "log_tail": "",
+        "log_mode": "html",
+        "ws_url": None,
         "windows_version": None,
         "rdp_port": None,
         "rdp_password": None,
@@ -147,10 +149,16 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
         if progress.status_code >= 400:
             return response
         text = progress.text or ""
-        if "Droger Windows auto-install" not in text:
+        if "Droger Windows auto-install" in text:
+            response["progress_ready"] = True
+            response["log_tail"] = _tail_log_from_progress_html(text)
             return response
-        response["progress_ready"] = True
-        response["log_tail"] = _tail_log_from_progress_html(text)
+        if "<title>Reinstall Logs</title>" in text or "ReconnectingWebSocket" in text:
+            response["progress_ready"] = True
+            response["log_mode"] = "ws"
+            response["ws_url"] = f"ws://{public_ip}/"
+            response["log_tail"] = "Live reinstall logs are streamed via websocket from the droplet progress page."
+            return response
     except Exception:
         return response
     return response
