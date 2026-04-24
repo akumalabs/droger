@@ -71,6 +71,8 @@ env_escape() {
 }
 
 save_state() {
+  local previous_umask
+  previous_umask="$(umask)"
   umask 077
   {
     echo "#!/usr/bin/env bash"
@@ -90,6 +92,7 @@ save_state() {
     declare -p TOKEN_ENCRYPTION_KEY
   } > "$STATE_FILE"
   chmod 600 "$STATE_FILE"
+  umask "$previous_umask"
 }
 
 if [[ -f "$STATE_FILE" ]]; then
@@ -362,9 +365,14 @@ log "Installing backend dependencies and migrations"
 sudo -u "$DEPLOY_USER" bash -lc "cd '$INSTALL_DIR/backend' && python3 -m venv venv && source venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt && alembic upgrade head"
 
 log "Building frontend"
-sudo -u "$DEPLOY_USER" bash -lc "cd '$INSTALL_DIR/frontend' && printf 'VITE_BACKEND_URL=%s\n' '$PUBLIC_ORIGIN' > .env && if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build"
+sudo -u "$DEPLOY_USER" bash -lc "cd '$INSTALL_DIR/frontend' && printf 'VITE_BACKEND_URL=%s
+' '$PUBLIC_ORIGIN' > .env && if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build"
+
+chmod o+x /opt /opt/dm /opt/dm/frontend
+chmod -R a+rX "$INSTALL_DIR/frontend/dist"
 
 log "Configuring supervisor"
+
 cat > /etc/supervisor/conf.d/dm-backend.conf <<EOF
 [program:dm-backend]
 directory=$INSTALL_DIR/backend
