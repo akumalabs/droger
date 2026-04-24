@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import TopNav from "../components/TopNav";
-import { useDOTokens } from "../context/DOTokenContext";
-import AddTokenDialog from "../components/AddTokenDialog";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
+import React, { useState } from "react"
+import { useNavigate } from "react-router-dom"
+import TopNav from "../components/TopNav"
+import { useDOTokens } from "../context/DOTokenContext"
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,52 +13,49 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "../components/ui/alert-dialog";
-import { Plus, PencilSimple, TrashSimple, Check, X as XIcon } from "@phosphor-icons/react";
-import { toast } from "sonner";
+} from "../components/ui/alert-dialog"
+import { Plus, PencilSimple, TrashSimple, Check, X as XIcon } from "@phosphor-icons/react"
+import { toast } from "sonner"
 
 export default function Settings() {
-  const { tokens, active, select, renameToken, deleteToken } = useDOTokens();
-  const [addOpen, setAddOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // {id, name}
-  const [confirmDelete, setConfirmDelete] = useState(null);
+  const { tokens, active, select, renameToken, deleteToken } = useDOTokens()
+  const [editing, setEditing] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null)
+  const navigate = useNavigate()
 
   const commitRename = async () => {
-    if (!editing?.name.trim()) return;
+    if (!editing?.name.trim()) return
     try {
-      await renameToken(editing.id, editing.name.trim());
-      toast.success("Renamed");
-      setEditing(null);
+      await renameToken(editing.id, editing.name.trim())
+      toast.success("Renamed")
+      setEditing(null)
     } catch {
-      toast.error("Rename failed");
+      toast.error("Rename failed")
     }
-  };
+  }
 
   const doDelete = async (id) => {
     try {
-      await deleteToken(id);
-      toast.success("Token removed");
+      await deleteToken(id)
+      toast.success("Token removed")
     } catch {
-      toast.error("Delete failed");
+      toast.error("Delete failed")
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-[#050505]">
       <TopNav />
       <main className="px-6 py-10 max-w-4xl mx-auto">
         <p className="overline text-accent-brand mb-3">ACCOUNT // SETTINGS</p>
-        <h1 className="font-heading text-4xl sm:text-5xl font-black tracking-tight mb-2">
-          DigitalOcean accounts
-        </h1>
+        <h1 className="font-heading text-4xl sm:text-5xl font-black tracking-tight mb-2">DigitalOcean accounts</h1>
         <p className="text-sm text-neutral-400 mb-8">
-          Manage the DO API tokens linked to your account. Tokens are encrypted
-          at rest and only decrypted in memory for outgoing DO calls.
+          Manage the DO API tokens linked to your account. Tokens are encrypted at rest and only decrypted in memory for outgoing DO calls.
         </p>
 
         <div className="flex justify-end mb-4">
           <Button
-            onClick={() => setAddOpen(true)}
+            onClick={() => navigate("/settings?add=1")}
             data-testid="settings-add-token"
             className="rounded-none bg-white text-black hover:bg-neutral-200"
           >
@@ -67,11 +64,7 @@ export default function Settings() {
         </div>
 
         <div className="border border-white/10">
-          {tokens.length === 0 && (
-            <div className="p-12 text-center text-neutral-500">
-              No DO tokens yet. Add one to start managing droplets.
-            </div>
-          )}
+          {tokens.length === 0 && <div className="p-12 text-center text-neutral-500">No DO tokens yet. Add one to start managing droplets.</div>}
           {tokens.map((t) => (
             <div
               key={t.id}
@@ -84,26 +77,14 @@ export default function Settings() {
                     <Input
                       autoFocus
                       value={editing.name}
-                      onChange={(e) =>
-                        setEditing({ ...editing, name: e.target.value })
-                      }
+                      onChange={(e) => setEditing({ ...editing, name: e.target.value })}
                       className="bg-black border-white/10 rounded-none font-mono h-8 max-w-xs"
                       onKeyDown={(e) => e.key === "Enter" && commitRename()}
                     />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={commitRename}
-                      className="h-8 w-8"
-                    >
+                    <Button size="icon" variant="ghost" onClick={commitRename} className="h-8 w-8">
                       <Check size={14} className="text-green-400" />
                     </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setEditing(null)}
-                      className="h-8 w-8"
-                    >
+                    <Button size="icon" variant="ghost" onClick={() => setEditing(null)} className="h-8 w-8">
                       <XIcon size={14} />
                     </Button>
                   </div>
@@ -118,8 +99,7 @@ export default function Settings() {
                   </div>
                 )}
                 <div className="text-xs font-mono text-neutral-500 mt-1">
-                  {t.do_email || "—"} · {t.droplet_limit ?? "?"} droplet limit ·
-                  added {new Date(t.created_at).toLocaleDateString()}
+                  {t.do_email || "—"} · {t.droplet_limit ?? "?"} droplet limit · added {new Date(t.created_at).toLocaleDateString()}
                 </div>
               </div>
               <div className="flex gap-1">
@@ -158,27 +138,20 @@ export default function Settings() {
         </div>
       </main>
 
-      <AddTokenDialog open={addOpen} onOpenChange={setAddOpen} />
-
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent className="bg-[#0f0f10] border-white/10 rounded-none">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-heading">
-              Remove token “{confirmDelete?.name}”?
-            </AlertDialogTitle>
+            <AlertDialogTitle className="font-heading">Remove token “{confirmDelete?.name}”?</AlertDialogTitle>
             <AlertDialogDescription className="text-neutral-400">
-              This removes the token from your vault. Your DigitalOcean account
-              is not affected — you can re-add the token any time.
+              This removes the token from your vault. Your DigitalOcean account is not affected — you can re-add the token any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-none border-white/10">
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel className="rounded-none border-white/10">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (confirmDelete) doDelete(confirmDelete.id);
-                setConfirmDelete(null);
+                if (confirmDelete) doDelete(confirmDelete.id)
+                setConfirmDelete(null)
               }}
               className="rounded-none bg-red-600 hover:bg-red-500"
               data-testid="confirm-delete-token"
@@ -189,5 +162,5 @@ export default function Settings() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
+  )
 }

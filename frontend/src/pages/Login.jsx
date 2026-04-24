@@ -1,61 +1,43 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { toast } from "sonner";
-import { GoogleLogo, ArrowRight, CircleNotch } from "@phosphor-icons/react";
+import React, { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { useAuth } from "../context/AuthContext"
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
+import { Label } from "../components/ui/label"
+import { toast } from "sonner"
+import { ArrowRight, CircleNotch } from "@phosphor-icons/react"
 
 function formatError(detail) {
-  if (!detail) return "Something went wrong";
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail))
-    return detail.map((e) => (e?.msg ? e.msg : JSON.stringify(e))).join(", ");
-  if (detail?.msg) return detail.msg;
-  return String(detail);
+  if (!detail) return "Something went wrong"
+  if (typeof detail === "string") return detail
+  if (Array.isArray(detail)) return detail.map((e) => (e?.msg ? e.msg : JSON.stringify(e))).join(", ")
+  if (detail?.msg) return detail.msg
+  return String(detail)
 }
 
 export default function Login() {
-  const { login, loginWithGoogle } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const navigate = useNavigate();
+  const { login } = useAuth()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [busy, setBusy] = useState(false)
+  const navigate = useNavigate()
 
   const submit = async (e) => {
-    e.preventDefault();
-    setBusy(true);
+    e.preventDefault()
+    setBusy(true)
     try {
-      await login(email, password);
-      toast.success("Welcome back");
-      navigate("/droplets");
+      await login(email, password)
+      toast.success("Welcome back")
+      navigate("/droplets")
     } catch (err) {
-      toast.error(formatError(err?.response?.data?.detail));
+      toast.error(formatError(err?.response?.data?.detail))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
-  };
+  }
 
   return (
     <AuthShell heading="Sign in to control room">
-      {/* REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH */}
-      <Button
-        type="button"
-        onClick={loginWithGoogle}
-        className="w-full rounded-none h-12 bg-white text-black hover:bg-neutral-200 font-medium"
-        data-testid="google-login-button"
-      >
-        <GoogleLogo size={18} weight="bold" className="mr-2" />
-        Continue with Google
-      </Button>
-
-      <div className="flex items-center gap-3 my-6 text-xs text-neutral-500">
-        <div className="flex-1 h-px bg-white/10" />
-        <span>OR EMAIL</span>
-        <div className="flex-1 h-px bg-white/10" />
-      </div>
-
       <form onSubmit={submit} className="space-y-4" data-testid="login-form">
         <div className="space-y-2">
           <Label className="overline">Email</Label>
@@ -107,7 +89,7 @@ export default function Login() {
         </Link>
       </div>
     </AuthShell>
-  );
+  )
 }
 
 export function AuthShell({ heading, children }) {
@@ -124,9 +106,7 @@ export function AuthShell({ heading, children }) {
       <div className="relative z-10 min-h-screen grid lg:grid-cols-2">
         <div className="hidden lg:flex flex-col justify-between p-16 border-r border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-black font-heading">
-              DM
-            </div>
+            <div className="w-8 h-8 bg-white text-black flex items-center justify-center font-black font-heading">DM</div>
             <span className="overline">DROPLET // MANAGER</span>
           </div>
           <div className="max-w-xl">
@@ -135,20 +115,16 @@ export function AuthShell({ heading, children }) {
               Many tokens.<br />One console.
             </h1>
             <p className="text-neutral-300 text-base md:text-lg leading-relaxed">
-              Save every DigitalOcean account under one login, switch with a
-              click, and deploy Windows on any droplet with a single wizard.
+              Save every DigitalOcean account under one login, switch with a click, and deploy Windows on any droplet
+              with a single wizard.
             </p>
           </div>
-          <div className="text-xs font-mono text-neutral-500">
-            TOKENS ENCRYPTED AT REST · YOUR ACCOUNTS, YOUR CONTROL
-          </div>
+          <div className="text-xs font-mono text-neutral-500">TOKENS ENCRYPTED AT REST · YOUR ACCOUNTS, YOUR CONTROL</div>
         </div>
         <div className="flex items-center justify-center p-6 sm:p-10 lg:p-16">
           <div className="w-full max-w-md border border-white/10 bg-[#0a0a0b] p-8">
             <div className="flex items-center gap-2 lg:hidden mb-4">
-              <div className="w-7 h-7 bg-white text-black flex items-center justify-center font-black font-heading text-sm">
-                DM
-              </div>
+              <div className="w-7 h-7 bg-white text-black flex items-center justify-center font-black font-heading text-sm">DM</div>
               <span className="overline">DROPLET // MANAGER</span>
             </div>
             <h2 className="font-heading text-3xl font-bold mb-6">{heading}</h2>
@@ -157,5 +133,5 @@ export function AuthShell({ heading, children }) {
         </div>
       </div>
     </div>
-  );
+  )
 }

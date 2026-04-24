@@ -1,67 +1,49 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { AuthShell } from "./Login";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { toast } from "sonner";
-import { GoogleLogo, ArrowRight, CircleNotch } from "@phosphor-icons/react";
+import React, { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { useAuth } from "../context/AuthContext"
+import { AuthShell } from "./Login"
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
+import { Label } from "../components/ui/label"
+import { toast } from "sonner"
+import { ArrowRight, CircleNotch } from "@phosphor-icons/react"
 
 function fmt(detail) {
-  if (!detail) return "Something went wrong";
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail))
-    return detail.map((e) => (e?.msg ? e.msg : JSON.stringify(e))).join(", ");
-  if (detail?.msg) return detail.msg;
-  return String(detail);
+  if (!detail) return "Something went wrong"
+  if (typeof detail === "string") return detail
+  if (Array.isArray(detail)) return detail.map((e) => (e?.msg ? e.msg : JSON.stringify(e))).join(", ")
+  if (detail?.msg) return detail.msg
+  return String(detail)
 }
 
 export default function Register() {
-  const { register, loginWithGoogle } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const navigate = useNavigate();
+  const { register } = useAuth()
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
+  const [busy, setBusy] = useState(false)
+  const navigate = useNavigate()
 
   const submit = async (e) => {
-    e.preventDefault();
+    e.preventDefault()
     if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
+      toast.error("Password must be at least 6 characters")
+      return
     }
-    setBusy(true);
+    setBusy(true)
     try {
-      await register(email, password, name);
-      toast.success("Account created");
-      navigate("/droplets");
+      await register(email, password, name)
+      toast.success("Account created")
+      navigate("/droplets")
     } catch (err) {
-      toast.error(fmt(err?.response?.data?.detail));
+      toast.error(fmt(err?.response?.data?.detail))
     } finally {
-      setBusy(false);
+      setBusy(false)
     }
-  };
+  }
 
   return (
     <AuthShell heading="Create your account">
-      {/* REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH */}
-      <Button
-        type="button"
-        onClick={loginWithGoogle}
-        className="w-full rounded-none h-12 bg-white text-black hover:bg-neutral-200 font-medium"
-        data-testid="google-register-button"
-      >
-        <GoogleLogo size={18} weight="bold" className="mr-2" />
-        Sign up with Google
-      </Button>
-
-      <div className="flex items-center gap-3 my-6 text-xs text-neutral-500">
-        <div className="flex-1 h-px bg-white/10" />
-        <span>OR EMAIL</span>
-        <div className="flex-1 h-px bg-white/10" />
-      </div>
-
       <form onSubmit={submit} className="space-y-4" data-testid="register-form">
         <div className="space-y-2">
           <Label className="overline">Display Name</Label>
@@ -122,5 +104,5 @@ export default function Register() {
         </Link>
       </p>
     </AuthShell>
-  );
+  )
 }
