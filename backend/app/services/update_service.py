@@ -8,6 +8,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 _update_lock = threading.Lock()
 
 
+def _git_command(*args: str) -> list[str]:
+    return ["git", "-c", f"safe.directory={REPO_ROOT}", *args]
+
+
 def _git_available() -> None:
     if not shutil.which("git"):
         raise HTTPException(status_code=503, detail="git is not available on this server")
@@ -25,7 +29,7 @@ def _run(command: list[str]) -> str:
 
 def _run_pull(branch: str) -> str:
     result = subprocess.run(
-        ["git", "pull", "--ff-only", "origin", branch],
+        _git_command("pull", "--ff-only", "origin", branch),
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
@@ -40,15 +44,15 @@ def _run_pull(branch: str) -> str:
 def get_update_status() -> dict:
     _git_available()
 
-    branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-    local_commit = _run(["git", "rev-parse", "HEAD"])
-    remote_line = _run(["git", "ls-remote", "--heads", "origin", branch])
+    branch = _run(_git_command("rev-parse", "--abbrev-ref", "HEAD"))
+    local_commit = _run(_git_command("rev-parse", "HEAD"))
+    remote_line = _run(_git_command("ls-remote", "--heads", "origin", branch))
     remote_commit = remote_line.split()[0] if remote_line else ""
 
     ahead = 0
     behind = 0
     if remote_commit:
-        counts = _run(["git", "rev-list", "--left-right", "--count", f"{local_commit}...{remote_commit}"])
+        counts = _run(_git_command("rev-list", "--left-right", "--count", f"{local_commit}...{remote_commit}"))
         try:
             ahead_str, behind_str = counts.split()
             ahead = int(ahead_str)
