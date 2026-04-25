@@ -18,9 +18,9 @@ def test_decorate_droplets_with_windows_labels_applies_by_droplet_id():
 
     decorated = wizard_service._decorate_droplets_with_windows_labels(
         droplets,
-        {1002: "win11pro"},
+        {1002: "win2016"},
     )
 
     assert decorated[0]["image"]["distribution"] == "Debian"
     assert decorated[1]["image"]["distribution"] == "Windows"
-    assert decorated[1]["image"]["name"] == "Windows 11 Pro"
+    assert decorated[1]["image"]["name"] == "Windows Server 2016 DC"

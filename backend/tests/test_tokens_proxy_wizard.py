@@ -26,7 +26,7 @@ def test_wizard_requires_auth(client):
             "region": "nyc3",
             "size": "s-1vcpu-1gb",
             "image": "ubuntu-22-04-x64",
-            "windows_version": "win11pro",
+            "windows_version": "win2022",
             "rdp_password": "Test1234!",
             "rdp_port": 33890,
         },
