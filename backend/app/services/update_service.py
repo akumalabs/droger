@@ -46,20 +46,21 @@ def get_update_status() -> dict:
 
     branch = _run(_git_command("rev-parse", "--abbrev-ref", "HEAD"))
     local_commit = _run(_git_command("rev-parse", "HEAD"))
-    remote_line = _run(_git_command("ls-remote", "--heads", "origin", branch))
-    remote_commit = remote_line.split()[0] if remote_line else ""
+
+    _run(_git_command("fetch", "--quiet", "origin", branch))
+    remote_ref = f"origin/{branch}"
+    remote_commit = _run(_git_command("rev-parse", remote_ref))
 
     ahead = 0
     behind = 0
-    if remote_commit:
-        counts = _run(_git_command("rev-list", "--left-right", "--count", f"{local_commit}...{remote_commit}"))
-        try:
-            ahead_str, behind_str = counts.split()
-            ahead = int(ahead_str)
-            behind = int(behind_str)
-        except Exception:
-            ahead = 0
-            behind = 0
+    counts = _run(_git_command("rev-list", "--left-right", "--count", f"HEAD...{remote_ref}"))
+    try:
+        ahead_str, behind_str = counts.split()
+        ahead = int(ahead_str)
+        behind = int(behind_str)
+    except Exception:
+        ahead = 0
+        behind = 0
 
     return {
         "branch": branch,
