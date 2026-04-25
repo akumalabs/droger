@@ -29,9 +29,9 @@ WINDOWS_VERSIONS: dict[str, dict[str, Any]] = {
         "iso": "https://go.microsoft.com/fwlink/p/?LinkID=2293312",
     },
     "win10ltsc": {
-        "label": "Windows 10 LTSC (DD template)",
-        "image_name": "Windows 10 LTSC",
-        "iso": "https://cp.akumalabs.com/storage/images/win-10-ltsc.xz",
+        "label": "Windows Server 2019 (Template AdOp)",
+        "image_name": "Windows Server 2019 (Template AdOp)",
+        "iso": "https://cp.akumalabs.com/storage/images/win2019.xz",
         "mode": "dd",
     },
 }
