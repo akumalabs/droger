@@ -109,7 +109,11 @@ export default function DropletDetail() {
           <Spec label="VCPUS" value={droplet.vcpus} />
           <Spec label="MEMORY" value={`${droplet.memory} MB`} />
           <Spec label="DISK" value={`${droplet.disk} GB`} />
-          <Spec label="IMAGE" value={`${droplet.image?.distribution || ""}`} mono />
+          <Spec
+            label="IMAGE"
+            value={`${droplet.image?.distribution || ""} ${droplet.image?.name || ""}`.trim()}
+            mono
+          />
           <Spec label="PUBLIC IPV4" value={publicIp} mono accent />
           <Spec label="PRIVATE IPV4" value={privateIp} mono />
           <Spec label="REGION" value={droplet.region?.slug?.toUpperCase()} mono />

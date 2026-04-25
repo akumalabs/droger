@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.deps import current_user
-from app.services import do_service, token_service
+from app.services import do_service, token_service, wizard_service
 
 router = APIRouter(prefix="/api/do", tags=["do-proxy"])
 
@@ -58,13 +58,15 @@ async def do_account(token_id: str, user=Depends(current_user), db: AsyncSession
 @router.get("/droplets")
 async def list_droplets(token_id: str, user=Depends(current_user), db: AsyncSession = Depends(get_db)):
     token = await _tok(user.user_id, token_id, db)
-    return await do_service.do_request("GET", "/droplets", token, params={"per_page": 200})
+    payload = await do_service.do_request("GET", "/droplets", token, params={"per_page": 200})
+    return await wizard_service.decorate_droplets_payload(db, user.user_id, token_id, payload)
 
 
 @router.get("/droplets/{droplet_id}")
 async def get_droplet(droplet_id: int, token_id: str, user=Depends(current_user), db: AsyncSession = Depends(get_db)):
     token = await _tok(user.user_id, token_id, db)
-    return await do_service.do_request("GET", f"/droplets/{droplet_id}", token)
+    payload = await do_service.do_request("GET", f"/droplets/{droplet_id}", token)
+    return await wizard_service.decorate_droplet_payload(db, user.user_id, token_id, payload)
 
 
 @router.post("/droplets")

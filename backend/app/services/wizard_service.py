@@ -11,7 +11,7 @@ from app.core import security, crypto
 from app.models import WizardJob
 from . import do_service
 from .token_service import resolve_token
-from .windows import build_windows_user_data
+from .windows import WINDOWS_VERSIONS, build_windows_user_data
 
 DO_API_BASE = "https://api.digitalocean.com/v2"
 DEFAULT_WIZARD_IMAGE = "debian-13-x64"
@@ -20,6 +20,54 @@ INSTALL_READY_CONSECUTIVE_SUCCESSES = 2
 _install_probe_successes: dict[str, int] = {}
 _ws_log_cache: dict[str, list[str]] = {}
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
+
+
+def _windows_label(version: str | None) -> str | None:
+    if not version:
+        return None
+    meta = WINDOWS_VERSIONS.get(version)
+    if meta:
+        return str(meta.get("label") or version)
+    return version
+
+
+def _overlay_droplet_windows_image(droplet: dict, windows_version: str | None) -> dict:
+    label = _windows_label(windows_version)
+    if not label:
+        return droplet
+
+    next_droplet = dict(droplet or {})
+    image = dict(next_droplet.get("image") or {})
+    image["distribution"] = "Windows"
+    image["name"] = label
+    next_droplet["image"] = image
+    return next_droplet
+
+
+def _latest_windows_version_for_droplets(rows: list[WizardJob]) -> dict[int, str]:
+    versions: dict[int, str] = {}
+    for row in rows:
+        if row.droplet_id is None:
+            continue
+        if row.droplet_id in versions:
+            continue
+        versions[int(row.droplet_id)] = row.windows_version
+    return versions
+
+
+def _decorate_droplets_with_windows_labels(droplets: list[dict], versions_by_droplet: dict[int, str]) -> list[dict]:
+    decorated: list[dict] = []
+    for droplet in droplets:
+        droplet_id = droplet.get("id")
+        version = versions_by_droplet.get(int(droplet_id)) if droplet_id is not None else None
+        decorated.append(_overlay_droplet_windows_image(droplet, version))
+    return decorated
+
+
+def _decorate_single_droplet_with_windows_label(droplet: dict, versions_by_droplet: dict[int, str]) -> dict:
+    droplet_id = droplet.get("id") if isinstance(droplet, dict) else None
+    version = versions_by_droplet.get(int(droplet_id)) if droplet_id is not None else None
+    return _overlay_droplet_windows_image(droplet, version)
 
 
 def _password_blob(password: str) -> str:
@@ -40,6 +88,62 @@ def _password_from_blob(blob: str | None) -> str | None:
 
 def _probe_key(user_id: str, token_id: str, droplet_id: int) -> str:
     return f"{user_id}:{token_id}:{droplet_id}"
+
+
+async def _windows_versions_for_user_token(
+    db: AsyncSession,
+    user_id: str,
+    token_id: str,
+    droplet_ids: list[int] | None = None,
+) -> dict[int, str]:
+    stmt = (
+        select(WizardJob)
+        .where(
+            WizardJob.user_id == user_id,
+            WizardJob.token_id == token_id,
+            WizardJob.droplet_id.is_not(None),
+        )
+        .order_by(WizardJob.created_at.desc())
+    )
+    if droplet_ids:
+        stmt = stmt.where(WizardJob.droplet_id.in_(droplet_ids))
+
+    rows = await db.scalars(stmt)
+    return _latest_windows_version_for_droplets(rows.all())
+
+
+async def decorate_droplet_payload(db: AsyncSession, user_id: str, token_id: str, payload: dict) -> dict:
+    droplet = payload.get("droplet") if isinstance(payload, dict) else None
+    if not droplet:
+        return payload
+
+    droplet_id = droplet.get("id")
+    if droplet_id is None:
+        return payload
+
+    versions = await _windows_versions_for_user_token(db, user_id, token_id, [int(droplet_id)])
+    payload["droplet"] = _decorate_single_droplet_with_windows_label(droplet, versions)
+    return payload
+
+
+async def decorate_droplets_payload(db: AsyncSession, user_id: str, token_id: str, payload: dict) -> dict:
+    droplets = payload.get("droplets") if isinstance(payload, dict) else None
+    if not droplets:
+        return payload
+
+    droplet_ids: list[int] = []
+    for droplet in droplets:
+        droplet_id = droplet.get("id") if isinstance(droplet, dict) else None
+        if droplet_id is None:
+            continue
+        droplet_ids.append(int(droplet_id))
+
+    if not droplet_ids:
+        return payload
+
+    versions = await _windows_versions_for_user_token(db, user_id, token_id, droplet_ids)
+    payload["droplets"] = _decorate_droplets_with_windows_labels(droplets, versions)
+    return payload
 
 
 async def _ping_host(host: str, timeout_sec: float = 1.5) -> bool:
@@ -232,6 +336,7 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
         response["windows_version"] = latest_job.windows_version
         response["rdp_port"] = latest_job.rdp_port
         response["rdp_password"] = _password_from_blob(latest_job.command)
+        response["droplet"] = _overlay_droplet_windows_image(droplet, latest_job.windows_version)
 
     if not public_ip:
         _install_probe_successes.pop(probe_key, None)

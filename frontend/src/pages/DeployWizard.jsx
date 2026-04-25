@@ -214,7 +214,7 @@ export default function DeployWizard() {
       <main className="px-6 py-8 max-w-4xl mx-auto">
         <p className="overline text-accent-brand mb-3">WIZARD // DEPLOY</p>
         <h1 className="font-heading text-4xl sm:text-5xl font-black tracking-tight mb-2">
-          Deploy Linux, install Windows
+          Auto Install Windows
         </h1>
         <p className="text-sm text-neutral-400 mb-8">
           Using token{" "}

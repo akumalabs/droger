@@ -44,7 +44,7 @@ export default function TopNav() {
           </Link>
           <nav className="hidden md:flex items-center gap-5 text-sm">
             <NavLink to="/droplets">Droplets</NavLink>
-            <NavLink to="/deploy">Deploy Wizard</NavLink>
+            <NavLink to="/deploy">Deploy Windows</NavLink>
             <NavLink to="/settings">Settings</NavLink>
           </nav>
         </div>
