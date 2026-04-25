@@ -1,17 +1,19 @@
 import asyncio
 import logging
-import os
 import resend
+from app.core.config import get_settings
 
 logger = logging.getLogger("mailer")
 
 
 async def send_email(to: str, subject: str, html: str) -> bool:
-    api_key = os.environ.get("RESEND_API_KEY")
-    sender = os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
+    settings = get_settings()
+    api_key = (settings.resend_api_key or "").strip()
+    sender = (settings.sender_email or "").strip() or "onboarding@resend.dev"
     if not api_key:
         logger.warning("email_fallback to=%s subject=%s", to, subject)
         return False
+
     resend.api_key = api_key
     params = {
         "from": sender,
@@ -21,6 +23,7 @@ async def send_email(to: str, subject: str, html: str) -> bool:
     }
     try:
         await asyncio.to_thread(resend.Emails.send, params)
+        logger.info("email_sent to=%s subject=%s", to, subject)
         return True
     except Exception:
         logger.exception("email_send_failed to=%s", to)
