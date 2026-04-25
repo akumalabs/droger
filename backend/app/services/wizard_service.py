@@ -103,14 +103,17 @@ async def _collect_ws_log_tail(public_ip: str, cache_key: str) -> str:
                 timeout_left = max(0.1, deadline - time.monotonic())
                 try:
                     payload = await asyncio.wait_for(ws.recv(), timeout=min(0.4, timeout_left))
-                    if isinstance(payload, bytes):
-                        payload = payload.decode("utf-8", errors="ignore")
-                    text = str(payload)
-                    if text:
-                        collected.append(text)
-                    if len(collected) >= 120:
-                        break
+                except asyncio.TimeoutError:
+                    continue
                 except Exception:
+                    break
+
+                if isinstance(payload, bytes):
+                    payload = payload.decode("utf-8", errors="ignore")
+                text = str(payload)
+                if text:
+                    collected.append(text)
+                if len(collected) >= 120:
                     break
     except Exception:
         return _append_ws_log(cache_key, "")
