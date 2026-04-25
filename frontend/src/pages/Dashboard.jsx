@@ -95,6 +95,16 @@ export default function Dashboard() {
   const publicIp = (d) =>
     d.networks?.v4?.find((n) => n.type === "public")?.ip_address || "—";
 
+  const imageLabel = (d) => {
+    const distribution = String(d.image?.distribution || "").trim();
+    const name = String(d.image?.name || "").trim();
+    if (distribution && name) {
+      if (name.toLowerCase().startsWith(distribution.toLowerCase())) return name;
+      return `${distribution} ${name}`.trim();
+    }
+    return name || distribution || "—";
+  };
+
   // No DO tokens saved → empty state
   if (tokens.length === 0) {
     return (
@@ -246,7 +256,7 @@ export default function Dashboard() {
                     {publicIp(d)}
                   </TableCell>
                   <TableCell className="text-xs text-neutral-400">
-                    {d.image?.distribution} {d.image?.name || ""}
+                    {imageLabel(d)}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>

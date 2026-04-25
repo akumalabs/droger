@@ -63,6 +63,14 @@ export default function DropletDetail() {
     droplet.networks?.v4?.find((n) => n.type === "public")?.ip_address || "—";
   const privateIp =
     droplet.networks?.v4?.find((n) => n.type === "private")?.ip_address || "—";
+  const imageDistribution = String(droplet.image?.distribution || "").trim();
+  const imageName = String(droplet.image?.name || "").trim();
+  const imageLabel =
+    imageDistribution && imageName
+      ? imageName.toLowerCase().startsWith(imageDistribution.toLowerCase())
+        ? imageName
+        : `${imageDistribution} ${imageName}`.trim()
+      : imageName || imageDistribution || "—";
 
   return (
     <div className="min-h-screen bg-[#050505]">
@@ -111,7 +119,7 @@ export default function DropletDetail() {
           <Spec label="DISK" value={`${droplet.disk} GB`} />
           <Spec
             label="IMAGE"
-            value={`${droplet.image?.distribution || ""} ${droplet.image?.name || ""}`.trim()}
+            value={imageLabel}
             mono
           />
           <Spec label="PUBLIC IPV4" value={publicIp} mono accent />
