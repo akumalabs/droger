@@ -46,7 +46,7 @@ export default function DeployWizard() {
   const [step, setStep] = useState(1);
 
   // Step 1
-  const [name, setName] = useState("win-box-01");
+  const [name, setName] = useState("server-01");
   const [region, setRegion] = useState("");
   const [size, setSize] = useState("");
   const [regions, setRegions] = useState([]);
@@ -56,8 +56,8 @@ export default function DeployWizard() {
 
   // Step 2
   const [versions, setVersions] = useState([]);
-  const [winVersion, setWinVersion] = useState("win2022");
-  const [rdpPort, setRdpPort] = useState(3389);
+  const [winVersion, setWinVersion] = useState("win2019");
+  const [rdpPort, setRdpPort] = useState(777);
   const [rdpPassword, setRdpPassword] = useState(randomPw());
   const [showPw, setShowPw] = useState(false);
 
