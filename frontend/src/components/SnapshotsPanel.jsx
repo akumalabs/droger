@@ -1,16 +1,14 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { api, getActiveTokenId } from "../lib/api";
+import { api } from "../lib/api";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "./ui/dialog";
 import {
   AlertDialog,
@@ -22,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { Camera, TrashSimple, ArrowCounterClockwise, CopySimple } from "@phosphor-icons/react";
+import { Camera, TrashSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export default function SnapshotsPanel({ dropletId }) {
@@ -32,12 +30,6 @@ export default function SnapshotsPanel({ dropletId }) {
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [confirmRestore, setConfirmRestore] = useState(null);
-  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
-  const [templateSnap, setTemplateSnap] = useState(null);
-  const [templateLabel, setTemplateLabel] = useState("");
-  const [templateNotes, setTemplateNotes] = useState("");
-  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,55 +70,6 @@ export default function SnapshotsPanel({ dropletId }) {
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Delete failed");
-    }
-  };
-
-  const doRestore = async (snap) => {
-    try {
-      await api.post(`/do/droplets/${dropletId}/actions`, {
-        action_type: "rebuild",
-        image: String(snap.id),
-      });
-      toast.success("Rebuild from snapshot started");
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Restore failed");
-    }
-  };
-
-  const openSaveTemplate = (snap) => {
-    setTemplateSnap(snap);
-    setTemplateLabel(snap?.name || "");
-    setTemplateNotes("");
-    setSaveTemplateOpen(true);
-  };
-
-  const saveTemplate = async () => {
-    if (!templateSnap || !templateLabel.trim()) return;
-    const tokenId = getActiveTokenId();
-    if (!tokenId) {
-      toast.error("Select a DO token first");
-      return;
-    }
-
-    setSavingTemplate(true);
-    try {
-      await api.post("/templates/from-snapshot", {
-        token_id: tokenId,
-        snapshot_id: Number(templateSnap.id),
-        label: templateLabel.trim(),
-        notes: templateNotes.trim() || null,
-        source_droplet_id: Number(dropletId),
-        snapshot_name: templateSnap.name || null,
-      });
-      toast.success("Template saved");
-      setSaveTemplateOpen(false);
-      setTemplateSnap(null);
-      setTemplateLabel("");
-      setTemplateNotes("");
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Save template failed");
-    } finally {
-      setSavingTemplate(false);
     }
   };
 
@@ -172,24 +115,6 @@ export default function SnapshotsPanel({ dropletId }) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => openSaveTemplate(s)}
-                className="rounded-none border-white/10"
-                data-testid={`save-template-${s.id}`}
-              >
-                <CopySimple size={14} className="mr-1" /> Save as Template
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConfirmRestore(s)}
-                className="rounded-none border-white/10"
-                data-testid={`restore-${s.id}`}
-              >
-                <ArrowCounterClockwise size={14} className="mr-1" /> Restore
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={() => setConfirmDelete(s)}
                 className="rounded-none border-white/10 text-red-400 hover:text-red-400 hover:bg-red-500/10"
                 data-testid={`delete-${s.id}`}
@@ -201,7 +126,6 @@ export default function SnapshotsPanel({ dropletId }) {
         ))}
       </div>
 
-      {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="bg-[#0f0f10] border-white/10 rounded-none">
           <DialogHeader>
@@ -240,69 +164,6 @@ export default function SnapshotsPanel({ dropletId }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={saveTemplateOpen}
-        onOpenChange={(open) => {
-          setSaveTemplateOpen(open);
-          if (!open) {
-            setTemplateSnap(null);
-            setTemplateLabel("");
-            setTemplateNotes("");
-          }
-        }}
-      >
-        <DialogContent className="bg-[#0f0f10] border-white/10 rounded-none">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Save as template</DialogTitle>
-            <DialogDescription className="text-neutral-400">
-              {templateSnap
-                ? `Snapshot “${templateSnap.name}” will become reusable across accounts.`
-                : "Create a reusable template from this snapshot."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label className="overline">Label</Label>
-              <Input
-                value={templateLabel}
-                onChange={(e) => setTemplateLabel(e.target.value)}
-                placeholder="Windows baseline"
-                className="bg-black border-white/10 rounded-none font-mono"
-                data-testid="template-label"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="overline">Notes</Label>
-              <Textarea
-                value={templateNotes}
-                onChange={(e) => setTemplateNotes(e.target.value)}
-                placeholder="Patch level, software, credentials policy..."
-                className="bg-black border-white/10 rounded-none font-mono min-h-[90px]"
-                data-testid="template-notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSaveTemplateOpen(false)}
-              className="rounded-none border-white/10"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={saveTemplate}
-              disabled={savingTemplate || !templateLabel.trim()}
-              className="rounded-none bg-white text-black hover:bg-neutral-200"
-              data-testid="confirm-save-template"
-            >
-              {savingTemplate ? "Saving…" : "Save Template"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete confirm */}
       <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <AlertDialogContent className="bg-[#0f0f10] border-white/10 rounded-none">
           <AlertDialogHeader>
@@ -323,33 +184,6 @@ export default function SnapshotsPanel({ dropletId }) {
               className="rounded-none bg-red-600 hover:bg-red-500"
             >
               Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Restore confirm */}
-      <AlertDialog open={!!confirmRestore} onOpenChange={(o) => !o && setConfirmRestore(null)}>
-        <AlertDialogContent className="bg-[#0f0f10] border-white/10 rounded-none">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-heading">
-              Rebuild from “{confirmRestore?.name}”?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-neutral-400">
-              This will overwrite the current disk of the droplet with the
-              snapshot contents. All current data will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-none border-white/10">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (confirmRestore) doRestore(confirmRestore);
-                setConfirmRestore(null);
-              }}
-              className="rounded-none bg-red-600 hover:bg-red-500"
-            >
-              Rebuild
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

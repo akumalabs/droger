@@ -8,7 +8,7 @@ from app.core.db import dispose_engine, get_engine, get_session_factory
 from app.core.redis import close_redis, init_redis
 from app.core.security import hash_password, verify_password, new_user_id
 from app.models import Base, User
-from app.routers import auth_router, do_proxy_router, tokens_router, windows_router, wizard_router, templates_router
+from app.routers import auth_router, do_proxy_router, tokens_router, windows_router, wizard_router
 
 
 @asynccontextmanager
@@ -79,4 +79,3 @@ app.include_router(tokens_router)
 app.include_router(do_proxy_router)
 app.include_router(windows_router)
 app.include_router(wizard_router)
-app.include_router(templates_router)

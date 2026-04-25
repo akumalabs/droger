@@ -1,14 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { api, getActiveTokenId } from "../lib/api";
+import React, { useState } from "react";
+import { api } from "../lib/api";
 import { Button } from "./ui/button";
-import { Label } from "./ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,14 +38,6 @@ const ACTIONS = [
     color: "#00E5FF",
   },
   {
-    key: "reinstall_windows",
-    label: "Reinstall Windows",
-    icon: ArrowClockwise,
-    desc: "Rebuild to Debian 13 and auto-install selected Windows version.",
-    destructive: true,
-    color: "#FBBF24",
-  },
-  {
     key: "shutdown",
     label: "Shutdown",
     icon: StopCircle,
@@ -87,50 +71,14 @@ const ACTIONS = [
   },
 ];
 
-export default function PowerPanel({ droplet, onChanged, onReinstallStarted }) {
+export default function PowerPanel({ droplet, onChanged }) {
   const [pending, setPending] = useState(null);
-  const [versions, setVersions] = useState([]);
-  const [reinstallVersion, setReinstallVersion] = useState("win2022");
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/do/windows-versions");
-        const nextVersions = data.versions || [];
-        setVersions(nextVersions);
-        if (
-          nextVersions.length > 0 &&
-          !nextVersions.some((v) => v.key === reinstallVersion)
-        ) {
-          setReinstallVersion(nextVersions[0].key);
-        }
-      } catch {
-      }
-    })();
-  }, []);
 
   const run = async (actionKey) => {
     try {
-      if (actionKey === "reinstall_windows") {
-        const tokenId = getActiveTokenId();
-        if (!tokenId) {
-          toast.error("No active token selected");
-          return;
-        }
-        const { data } = await api.post(`/wizard/reinstall/${droplet.id}`, {
-          token_id: tokenId,
-          windows_version: reinstallVersion,
-        });
-        onReinstallStarted?.({
-          windowsVersion: data.windows_version || reinstallVersion,
-          rdpPassword: data.rdp_password,
-          rdpPort: data.rdp_port,
-        });
-      } else {
-        await api.post(`/do/droplets/${droplet.id}/actions`, {
-          action_type: actionKey,
-        });
-      }
+      await api.post(`/do/droplets/${droplet.id}/actions`, {
+        action_type: actionKey,
+      });
       toast.success(`${actionKey} initiated`);
       setTimeout(onChanged, 1500);
     } catch (e) {
@@ -189,28 +137,6 @@ export default function PowerPanel({ droplet, onChanged, onReinstallStarted }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          {pending?.key === "reinstall_windows" && (
-            <div className="space-y-3">
-              <Field label="Windows Version">
-                <Select value={reinstallVersion} onValueChange={setReinstallVersion}>
-                  <SelectTrigger className="bg-black border-white/10 rounded-none">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#0f0f10] border-white/10 rounded-none">
-                    {versions.map((v) => (
-                      <SelectItem key={v.key} value={v.key}>
-                        {v.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <div className="text-xs text-neutral-400 font-mono">
-                Reinstall reuses the last saved RDP password and port; they are shown in droplet details.
-              </div>
-            </div>
-          )}
-
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-none border-white/10">
               Cancel
@@ -228,15 +154,6 @@ export default function PowerPanel({ droplet, onChanged, onReinstallStarted }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <div className="space-y-2">
-      <Label className="overline">{label}</Label>
-      {children}
     </div>
   );
 }

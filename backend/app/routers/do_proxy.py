@@ -30,7 +30,6 @@ class CreateDropletReq(BaseModel):
 
 class DropletActionReq(BaseModel):
     action_type: str
-    image: str | None = None
 
 
 class SnapshotReq(BaseModel):
@@ -43,7 +42,6 @@ ALLOWED_ACTIONS = {
     "shutdown",
     "reboot",
     "power_cycle",
-    "rebuild",
     "enable_ipv6",
     "enable_backups",
     "disable_backups",
@@ -93,10 +91,6 @@ async def droplet_action(
     if payload.action_type not in ALLOWED_ACTIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported action: {payload.action_type}")
     body: dict[str, Any] = {"type": payload.action_type}
-    if payload.action_type == "rebuild":
-        if not payload.image:
-            raise HTTPException(status_code=400, detail="image is required for rebuild")
-        body["image"] = payload.image
     return await do_service.do_request("POST", f"/droplets/{droplet_id}/actions", token, json_body=body)
 
 

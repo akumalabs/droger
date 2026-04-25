@@ -27,11 +27,6 @@ class DeployWizardReq(BaseModel):
         return value
 
 
-class ReinstallReq(BaseModel):
-    token_id: str
-    windows_version: str
-
-
 @router.post("/deploy-windows")
 async def deploy_windows(payload: DeployWizardReq, user=Depends(current_user), db: AsyncSession = Depends(get_db)):
     return await wizard_service.deploy_windows(
@@ -51,22 +46,6 @@ async def deploy_windows(payload: DeployWizardReq, user=Depends(current_user), d
 @router.get("/progress/{droplet_id}")
 async def install_progress(droplet_id: int, token_id: str, user=Depends(current_user), db: AsyncSession = Depends(get_db)):
     return await wizard_service.get_install_progress(db, user.user_id, token_id, droplet_id)
-
-
-@router.post("/reinstall/{droplet_id}")
-async def reinstall_windows(
-    droplet_id: int,
-    payload: ReinstallReq,
-    user=Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    return await wizard_service.reinstall_windows(
-        db=db,
-        user_id=user.user_id,
-        token_id=payload.token_id,
-        droplet_id=droplet_id,
-        windows_version=payload.windows_version,
-    )
 
 
 @router.get("/jobs")

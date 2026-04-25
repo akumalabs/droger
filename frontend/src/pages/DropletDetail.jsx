@@ -1,38 +1,25 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, getActiveTokenId } from "../lib/api";
+import { api } from "../lib/api";
 import TopNav from "../components/TopNav";
 import StatusBadge from "../components/StatusBadge";
 import SnapshotsPanel from "../components/SnapshotsPanel";
 import PowerPanel from "../components/PowerPanel";
 import { Button } from "../components/ui/button";
-import { Progress } from "../components/ui/progress";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
-import { ArrowLeft, ArrowsClockwise, CheckCircle, CircleNotch } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowsClockwise } from "@phosphor-icons/react";
 import { toast } from "sonner";
-
-const PROGRESS_LOG_MIN_WAIT = 30;
-const PROGRESS_LOG_MAX_WAIT = 60;
 
 export default function DropletDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [droplet, setDroplet] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [reinstallState, setReinstallState] = useState(null);
-  const [progressReady, setProgressReady] = useState(false);
-  const [progressLog, setProgressLog] = useState("");
-  const [pingOk, setPingOk] = useState(false);
-  const [rdpOpen, setRdpOpen] = useState(false);
-  const [installComplete, setInstallComplete] = useState(false);
-  const [installMessage, setInstallMessage] = useState("");
-  const [progressWaitSeconds, setProgressWaitSeconds] = useState(0);
-  const pollRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,74 +37,6 @@ export default function DropletDetail() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!id) return;
-    const tokenId = getActiveTokenId();
-    if (!tokenId) return;
-    (async () => {
-      try {
-        const { data } = await api.get(`/wizard/progress/${id}`, {
-          params: { token_id: tokenId },
-        });
-        if (data?.windows_version && data?.rdp_port) {
-          setReinstallState({
-            windowsVersion: data.windows_version,
-            rdpPassword: data.rdp_password,
-            rdpPort: data.rdp_port,
-          });
-          setProgressReady(Boolean(data.progress_ready));
-          setProgressLog(data.log_tail || "");
-          setPingOk(Boolean(data.ping_ok));
-          setRdpOpen(Boolean(data.rdp_open));
-          setInstallComplete(Boolean(data.install_complete));
-          setInstallMessage(data.install_message || "");
-        }
-      } catch {
-      }
-    })();
-  }, [id]);
-
-  useEffect(() => {
-    if (!reinstallState || !id) return;
-    const tokenId = getActiveTokenId();
-    if (!tokenId) return;
-    let stopped = false;
-    let elapsed = 0;
-    const poll = async () => {
-      try {
-        const { data } = await api.get(`/wizard/progress/${id}`, {
-          params: { token_id: tokenId },
-        });
-        setDroplet(data.droplet || null);
-        setProgressReady(Boolean(data.progress_ready));
-        setProgressLog(data.log_tail || "");
-        setPingOk(Boolean(data.ping_ok));
-        setRdpOpen(Boolean(data.rdp_open));
-        setInstallComplete(Boolean(data.install_complete));
-        setInstallMessage(data.install_message || "");
-      } catch {
-      } finally {
-        elapsed += 5;
-        setProgressWaitSeconds(elapsed);
-        if (!stopped) {
-          pollRef.current = setTimeout(poll, 5000);
-        }
-      }
-    };
-    setProgressReady(false);
-    setProgressLog("");
-    setPingOk(false);
-    setRdpOpen(false);
-    setInstallComplete(false);
-    setInstallMessage("");
-    setProgressWaitSeconds(0);
-    poll();
-    return () => {
-      stopped = true;
-      if (pollRef.current) clearTimeout(pollRef.current);
-    };
-  }, [reinstallState, id]);
-
   if (loading && !droplet) {
     return (
       <div className="min-h-screen bg-[#050505]">
@@ -126,6 +45,7 @@ export default function DropletDetail() {
       </div>
     );
   }
+
   if (!droplet) {
     return (
       <div className="min-h-screen bg-[#050505]">
@@ -143,15 +63,6 @@ export default function DropletDetail() {
     droplet.networks?.v4?.find((n) => n.type === "public")?.ip_address || "—";
   const privateIp =
     droplet.networks?.v4?.find((n) => n.type === "private")?.ip_address || "—";
-
-  const progressEstimate = Math.min(
-    100,
-    Math.round((progressWaitSeconds / PROGRESS_LOG_MAX_WAIT) * 100),
-  );
-  const progressRemaining = Math.max(
-    0,
-    PROGRESS_LOG_MIN_WAIT - progressWaitSeconds,
-  );
 
   return (
     <div className="min-h-screen bg-[#050505]">
@@ -194,71 +105,6 @@ export default function DropletDetail() {
           </div>
         </div>
 
-        {reinstallState && (
-          <div className="border border-white/10 p-6 mb-10 space-y-4">
-            <p className="overline">REINSTALL STATUS</p>
-            <div className="text-sm text-neutral-300 space-y-1">
-              <div>
-                Target Windows: <span className="font-mono text-accent-brand">{reinstallState.windowsVersion}</span>
-              </div>
-              <div>
-                RDP: <span className="font-mono text-accent-brand">{publicIp}:{reinstallState.rdpPort}</span> (Administrator)
-              </div>
-              <div>
-                Password: <span className="font-mono text-accent-brand">{reinstallState.rdpPassword || "Unavailable"}</span>
-              </div>
-              <div>
-                Progress page: <span className="font-mono text-accent-brand">http://{publicIp}/</span>
-              </div>
-            </div>
-
-            {installComplete && (
-              <div className="text-xs text-green-400 font-mono border border-green-500/30 p-3">
-                {installMessage || "Windows installation complete. You should be able to access it now."}
-              </div>
-            )}
-            {!installComplete && (
-              <div className="text-xs text-neutral-400 font-mono">
-                Connectivity checks · ICMP: {pingOk ? "OK" : "waiting"} · RDP {reinstallState.rdpPort}: {rdpOpen ? "OPEN" : "waiting"}
-              </div>
-            )}
-
-            {!progressReady && (
-              <div className="space-y-2">
-                <div className="text-xs text-neutral-400 font-mono">
-                  Bootstrapping progress logs… usually visible in
-                  {` ${PROGRESS_LOG_MIN_WAIT}-${PROGRESS_LOG_MAX_WAIT}s`}.
-                  {progressRemaining > 0
-                    ? ` ~${progressRemaining}s remaining before first logs.`
-                    : " Checking every 5s for first output."}
-                </div>
-                <Progress
-                  value={progressEstimate}
-                  className="h-1.5 rounded-none bg-white/10 [&>div]:bg-accent-brand"
-                />
-              </div>
-            )}
-            {progressReady && (
-              <div className="text-xs text-green-400 font-mono flex items-center gap-2">
-                <CheckCircle size={14} weight="fill" /> Progress logs are live.
-              </div>
-            )}
-
-            <pre
-              className="bg-black border border-white/10 p-3 text-xs font-mono text-green-400 whitespace-pre-wrap break-all max-h-64 overflow-auto"
-              data-testid="reinstall-progress-log"
-            >
-              {progressLog || "No log output yet."}
-            </pre>
-
-            {droplet.status !== "active" && (
-              <div className="text-xs text-neutral-400 font-mono flex items-center gap-2">
-                <CircleNotch className="animate-spin" size={14} /> Waiting for droplet to become active.
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border border-white/10 mb-10">
           <Spec label="VCPUS" value={droplet.vcpus} />
           <Spec label="MEMORY" value={`${droplet.memory} MB`} />
@@ -295,10 +141,6 @@ export default function DropletDetail() {
             <PowerPanel
               droplet={droplet}
               onChanged={load}
-              onReinstallStarted={(meta) => {
-                setReinstallState(meta);
-                toast.success("Reinstall started. Live progress polling enabled.");
-              }}
             />
           </TabsContent>
           <TabsContent value="snapshots" className="pt-6">
