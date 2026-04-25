@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useDOTokens } from "../context/DOTokenContext";
+import { api } from "../lib/api";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -21,13 +22,69 @@ import {
   Gear,
   User as UserIcon,
   Check,
+  ArrowsClockwise,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 export default function TopNav() {
   const { user, logout } = useAuth();
   const { tokens, active, select } = useDOTokens();
   const [addOpen, setAddOpen] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
   const navigate = useNavigate();
+
+  const isAdmin = user?.role === "admin";
+
+  const refreshUpdateStatus = useCallback(async () => {
+    if (!isAdmin) {
+      setUpdateStatus(null);
+      return;
+    }
+    setCheckingUpdate(true);
+    try {
+      const { data } = await api.get("/system/update");
+      setUpdateStatus(data);
+    } catch {
+      setUpdateStatus(null);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    refreshUpdateStatus();
+  }, [refreshUpdateStatus]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const timer = setInterval(() => {
+      refreshUpdateStatus();
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [isAdmin, refreshUpdateStatus]);
+
+  const applyUpdate = async () => {
+    if (!isAdmin || applyingUpdate) return;
+    setApplyingUpdate(true);
+    try {
+      const { data } = await api.post("/system/update");
+      if (data?.updated) {
+        toast.success("Update applied. Reloading…");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        toast.success(data?.message || "Already up to date");
+      }
+      await refreshUpdateStatus();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Update failed");
+    } finally {
+      setApplyingUpdate(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-[#050505]/95 backdrop-blur-sm border-b border-white/10">
@@ -50,6 +107,22 @@ export default function TopNav() {
         </div>
 
         <div className="flex items-center gap-3 min-w-0">
+          {isAdmin && updateStatus?.update_available && (
+            <Button
+              data-testid="update-app-button"
+              size="sm"
+              onClick={applyUpdate}
+              disabled={applyingUpdate || checkingUpdate}
+              className="rounded-none bg-accent-brand text-black hover:bg-accent-brand/90"
+            >
+              <ArrowsClockwise
+                size={14}
+                className={`mr-2 ${applyingUpdate || checkingUpdate ? "animate-spin" : ""}`}
+              />
+              {applyingUpdate ? "Updating…" : "Update"}
+            </Button>
+          )}
+
           {/* DO token switcher */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
