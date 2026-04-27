@@ -57,7 +57,7 @@ export default function DeployWizard() {
   // Step 2
   const [versions, setVersions] = useState([]);
   const [winVersion, setWinVersion] = useState("win10ltsc");
-  const [rdpPort, setRdpPort] = useState(777);
+  const [rdpPort, setRdpPort] = useState(3389);
   const [rdpPassword, setRdpPassword] = useState(randomPw());
   const [showPw, setShowPw] = useState(false);
 

@@ -31,7 +31,7 @@ export default function DropletDetail() {
   const [rdpOpen, setRdpOpen] = useState(false);
   const [installComplete, setInstallComplete] = useState(false);
   const [installMessage, setInstallMessage] = useState("");
-  const [rdpPort, setRdpPort] = useState(3389);
+  const [rdpPort, setRdpPort] = useState(null);
   const [rdpPassword, setRdpPassword] = useState("");
 
   const load = useCallback(async () => {
@@ -60,7 +60,7 @@ export default function DropletDetail() {
       setRdpOpen(false);
       setInstallComplete(false);
       setInstallMessage("");
-      setRdpPort(3389);
+      setRdpPort(null);
       setRdpPassword("");
       return;
     }
@@ -74,7 +74,7 @@ export default function DropletDetail() {
       setRdpOpen(false);
       setInstallComplete(false);
       setInstallMessage("");
-      setRdpPort(3389);
+      setRdpPort(null);
       setRdpPassword("");
       return;
     }
@@ -91,7 +91,7 @@ export default function DropletDetail() {
         const nextPort =
           Number.isInteger(data.rdp_port) && data.rdp_port >= 1 && data.rdp_port <= 65535
             ? data.rdp_port
-            : 3389;
+            : null;
 
         setStatusReady(true);
         setStatusError("");
@@ -119,7 +119,7 @@ export default function DropletDetail() {
     setRdpOpen(false);
     setInstallComplete(false);
     setInstallMessage("");
-    setRdpPort(3389);
+    setRdpPort(null);
     setRdpPassword("");
     poll();
 
@@ -240,7 +240,7 @@ export default function DropletDetail() {
               <span>·</span>
               <span>ICMP: {pingOk ? "OK" : "waiting"}</span>
               <span>·</span>
-              <span>RDP {rdpPort}: {rdpOpen ? "OPEN" : "waiting"}</span>
+              <span>RDP {rdpPort ?? "—"}: {rdpOpen ? "OPEN" : "waiting"}</span>
             </div>
           )}
 

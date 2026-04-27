@@ -28,9 +28,9 @@ def _run(command: list[str]) -> str:
     return (result.stdout or "").strip()
 
 
-def _run_pull(branch: str) -> str:
+def _run_pull(branch: str, remote: str = "origin") -> str:
     result = subprocess.run(
-        _git_command("pull", "--ff-only", "origin", branch),
+        _git_command("pull", "--ff-only", remote, branch),
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
@@ -115,6 +115,18 @@ def _resolve_remote_ref(branch: str) -> str:
     raise HTTPException(status_code=500, detail="Unable to determine tracked remote branch")
 
 
+def _split_remote_ref(remote_ref: str) -> tuple[str, str]:
+    if "/" not in remote_ref:
+        raise HTTPException(status_code=500, detail="Invalid tracked remote ref")
+
+    remote, branch = remote_ref.split("/", 1)
+    remote = remote.strip()
+    branch = branch.strip()
+    if not remote or not branch:
+        raise HTTPException(status_code=500, detail="Invalid tracked remote ref")
+    return remote, branch
+
+
 def get_update_status() -> dict:
     _git_available()
 
@@ -122,7 +134,7 @@ def get_update_status() -> dict:
     local_commit = _run(_git_command("rev-parse", "HEAD"))
 
     remote_ref = _resolve_remote_ref(branch)
-    remote_name = remote_ref.split("/", 1)[0] if "/" in remote_ref else "origin"
+    remote_name, _ = _split_remote_ref(remote_ref)
 
     _run(_git_command("fetch", "--quiet", remote_name))
     remote_commit = _run(_git_command("rev-parse", remote_ref))
@@ -146,6 +158,7 @@ def get_update_status() -> dict:
         "behind": behind,
         "update_available": bool(behind > 0),
         "repo_path": str(REPO_ROOT),
+        "tracked_remote_ref": remote_ref,
     }
 
 
@@ -166,7 +179,9 @@ def apply_update() -> dict:
                 "output": "",
             }
 
-        pull_output = _run_pull(before["branch"])
+        remote_ref = before.get("tracked_remote_ref")
+        remote_name, remote_branch = _split_remote_ref(str(remote_ref or ""))
+        pull_output = _run_pull(remote_branch, remote_name)
         build_output = _run_frontend_build()
         after = get_update_status()
         output = "\n".join(part for part in [pull_output, build_output] if part).strip()

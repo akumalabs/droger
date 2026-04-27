@@ -114,7 +114,7 @@ export default function TopNav() {
               size="sm"
               onClick={applyUpdate}
               disabled={applyingUpdate || checkingUpdate}
-              className="rounded-none border-white/10 hover:bg-white/5 text-red-400 hover:text-red-300"
+              className="rounded-none border-white/10 hover:bg-white/5"
             >
               <ArrowsClockwise
                 size={14}

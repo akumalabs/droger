@@ -104,15 +104,17 @@ def test_apply_update_includes_frontend_build_output(monkeypatch):
     before_status = {
         "branch": "main",
         "update_available": True,
+        "tracked_remote_ref": "origin/main",
     }
     after_status = {
         "branch": "main",
         "update_available": False,
+        "tracked_remote_ref": "origin/main",
     }
 
     monkeypatch.setattr(update_service, "_git_available", lambda: None)
     monkeypatch.setattr(update_service, "get_update_status", lambda: before_status)
-    monkeypatch.setattr(update_service, "_run_pull", lambda _branch: "pull ok")
+    monkeypatch.setattr(update_service, "_run_pull", lambda _branch, _remote: "pull ok")
     monkeypatch.setattr(update_service, "_run_frontend_build", lambda: "build ok")
 
     state = {"count": 0}
@@ -128,3 +130,13 @@ def test_apply_update_includes_frontend_build_output(monkeypatch):
     assert result["updated"] is True
     assert result["status"] == after_status
     assert result["output"] == "pull ok\nbuild ok"
+
+
+def test_split_remote_ref_validates_input():
+    assert update_service._split_remote_ref("origin/main") == ("origin", "main")
+
+    try:
+        update_service._split_remote_ref("main")
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 500
