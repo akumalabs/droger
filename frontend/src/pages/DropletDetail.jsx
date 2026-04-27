@@ -191,10 +191,6 @@ export default function DropletDetail() {
             <h1 className="font-heading text-4xl sm:text-5xl font-black tracking-tight">
               {droplet.name}
             </h1>
-            <p className="text-sm text-neutral-400 mt-2 font-mono">
-              {droplet.region?.name} · {droplet.size_slug} ·{" "}
-              <span className="text-accent-brand">{publicIp}</span>
-            </p>
           </div>
           <div className="flex gap-2">
             <Button

@@ -41,14 +41,52 @@ def _run_pull(branch: str) -> str:
     return (result.stdout or "").strip()
 
 
+def _upstream_remote_ref() -> str | None:
+    try:
+        ref = _run(_git_command("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"))
+    except HTTPException:
+        return None
+    ref = (ref or "").strip()
+    return ref or None
+
+
+def _origin_default_remote_ref() -> str | None:
+    try:
+        ref = _run(_git_command("symbolic-ref", "refs/remotes/origin/HEAD"))
+    except HTTPException:
+        return None
+    ref = (ref or "").strip()
+    prefix = "refs/remotes/"
+    if ref.startswith(prefix):
+        return ref[len(prefix):]
+    return None
+
+
+def _resolve_remote_ref(branch: str) -> str:
+    upstream_ref = _upstream_remote_ref()
+    if upstream_ref:
+        return upstream_ref
+
+    if branch and branch != "HEAD":
+        return f"origin/{branch}"
+
+    origin_default = _origin_default_remote_ref()
+    if origin_default:
+        return origin_default
+
+    raise HTTPException(status_code=500, detail="Unable to determine tracked remote branch")
+
+
 def get_update_status() -> dict:
     _git_available()
 
     branch = _run(_git_command("rev-parse", "--abbrev-ref", "HEAD"))
     local_commit = _run(_git_command("rev-parse", "HEAD"))
 
-    _run(_git_command("fetch", "--quiet", "origin", branch))
-    remote_ref = f"origin/{branch}"
+    remote_ref = _resolve_remote_ref(branch)
+    remote_name = remote_ref.split("/", 1)[0] if "/" in remote_ref else "origin"
+
+    _run(_git_command("fetch", "--quiet", remote_name))
     remote_commit = _run(_git_command("rev-parse", remote_ref))
 
     ahead = 0
