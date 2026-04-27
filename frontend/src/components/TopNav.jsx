@@ -110,16 +110,17 @@ export default function TopNav() {
           {isAdmin && updateStatus?.update_available && (
             <Button
               data-testid="update-app-button"
+              variant="outline"
               size="sm"
               onClick={applyUpdate}
               disabled={applyingUpdate || checkingUpdate}
-              className="rounded-none bg-accent-brand text-black hover:bg-accent-brand/90"
+              className="rounded-none border-white/10 hover:bg-white/5 text-red-400 hover:text-red-300"
             >
               <ArrowsClockwise
                 size={14}
                 className={`mr-2 ${applyingUpdate || checkingUpdate ? "animate-spin" : ""}`}
               />
-              {applyingUpdate ? "Updating…" : "Update"}
+              {applyingUpdate ? "Updating…" : "Update Version"}
             </Button>
           )}
 
