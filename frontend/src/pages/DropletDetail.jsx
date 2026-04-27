@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import TopNav from "../components/TopNav";
@@ -12,14 +12,27 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
-import { ArrowLeft, ArrowsClockwise } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowsClockwise, CheckCircle, CircleNotch } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { useDOTokens } from "../context/DOTokenContext";
 
 export default function DropletDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { active } = useDOTokens();
+  const pollRef = useRef(null);
   const [droplet, setDroplet] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusReady, setStatusReady] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [statusPublicIp, setStatusPublicIp] = useState("");
+  const [pingOk, setPingOk] = useState(false);
+  const [rdpOpen, setRdpOpen] = useState(false);
+  const [installComplete, setInstallComplete] = useState(false);
+  const [installMessage, setInstallMessage] = useState("");
+  const [rdpPort, setRdpPort] = useState(3389);
+  const [rdpPassword, setRdpPassword] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,6 +49,85 @@ export default function DropletDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!id) {
+      setStatusLoading(false);
+      setStatusReady(false);
+      setStatusError("");
+      setStatusPublicIp("");
+      setPingOk(false);
+      setRdpOpen(false);
+      setInstallComplete(false);
+      setInstallMessage("");
+      setRdpPort(3389);
+      setRdpPassword("");
+      return;
+    }
+
+    if (!active?.id) {
+      setStatusLoading(false);
+      setStatusReady(false);
+      setStatusError("No active DigitalOcean token selected");
+      setStatusPublicIp("");
+      setPingOk(false);
+      setRdpOpen(false);
+      setInstallComplete(false);
+      setInstallMessage("");
+      setRdpPort(3389);
+      setRdpPassword("");
+      return;
+    }
+
+    let stopped = false;
+    const poll = async () => {
+      try {
+        setStatusLoading(true);
+        const { data } = await api.get(`/wizard/progress/${id}`, {
+          params: { token_id: active.id },
+        });
+        if (stopped) return;
+
+        const nextPort =
+          Number.isInteger(data.rdp_port) && data.rdp_port >= 1 && data.rdp_port <= 65535
+            ? data.rdp_port
+            : 3389;
+
+        setStatusReady(true);
+        setStatusError("");
+        setStatusPublicIp(data.public_ip || "");
+        setPingOk(Boolean(data.ping_ok));
+        setRdpOpen(Boolean(data.rdp_open));
+        setInstallComplete(Boolean(data.install_complete));
+        setInstallMessage(data.install_message || "");
+        setRdpPort(nextPort);
+        setRdpPassword(data.rdp_password || "");
+      } catch (e) {
+        if (stopped) return;
+        setStatusError(e?.response?.data?.detail || "Unable to fetch install status");
+      } finally {
+        if (stopped) return;
+        setStatusLoading(false);
+        pollRef.current = setTimeout(poll, 5000);
+      }
+    };
+
+    setStatusReady(false);
+    setStatusError("");
+    setStatusPublicIp("");
+    setPingOk(false);
+    setRdpOpen(false);
+    setInstallComplete(false);
+    setInstallMessage("");
+    setRdpPort(3389);
+    setRdpPassword("");
+    poll();
+
+    return () => {
+      stopped = true;
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
+  }, [id, active?.id]);
 
   if (loading && !droplet) {
     return (
@@ -71,6 +163,9 @@ export default function DropletDetail() {
         ? imageName
         : `${imageDistribution} ${imageName}`.trim()
       : imageName || imageDistribution || "—";
+  const windowsPublicIp = statusPublicIp || (publicIp !== "—" ? publicIp : "—");
+  const readyMessage =
+    installMessage || "Windows has been installed, you should be able to access it now.";
 
   return (
     <div className="min-h-screen bg-[#050505]">
@@ -130,6 +225,39 @@ export default function DropletDetail() {
             value={new Date(droplet.created_at).toLocaleDateString()}
             mono
           />
+        </div>
+
+        <div className="border border-white/10 p-6 mb-10 space-y-4">
+          <p className="overline mb-1">WINDOWS INSTALL STATUS</p>
+
+          {installComplete && (
+            <div className="text-xs text-green-400 font-mono border border-green-500/30 p-3 flex items-center gap-2">
+              <CheckCircle size={14} weight="fill" />
+              {readyMessage}
+            </div>
+          )}
+
+          {!installComplete && (
+            <div className="text-xs text-neutral-400 font-mono flex flex-wrap items-center gap-2">
+              {statusLoading && !statusReady && <CircleNotch className="animate-spin" size={14} />}
+              <span>Connectivity checks</span>
+              <span>·</span>
+              <span>ICMP: {pingOk ? "OK" : "waiting"}</span>
+              <span>·</span>
+              <span>RDP {rdpPort}: {rdpOpen ? "OPEN" : "waiting"}</span>
+            </div>
+          )}
+
+          {statusError && (
+            <div className="text-xs text-red-400 font-mono border border-red-500/30 p-3">{statusError}</div>
+          )}
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border border-white/10">
+            <Spec label="IP" value={windowsPublicIp} mono accent />
+            <Spec label="USERNAME" value="Administrator" mono />
+            <Spec label="PASSWORD" value={rdpPassword || "—"} mono />
+            <Spec label="PORT" value={rdpPort} mono />
+          </div>
         </div>
 
         <Tabs defaultValue="power" className="w-full">

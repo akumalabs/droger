@@ -15,6 +15,7 @@ from .windows import WINDOWS_VERSIONS, build_windows_user_data
 
 DO_API_BASE = "https://api.digitalocean.com/v2"
 DEFAULT_WIZARD_IMAGE = "debian-13-x64"
+DEFAULT_RDP_PORT = 3389
 PASSWORD_BLOB_PREFIX = "[encpw]"
 INSTALL_READY_CONSECUTIVE_SUCCESSES = 2
 _install_probe_successes: dict[str, int] = {}
@@ -314,7 +315,7 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
         "log_mode": "html",
         "ws_url": None,
         "windows_version": None,
-        "rdp_port": None,
+        "rdp_port": DEFAULT_RDP_PORT,
         "rdp_password": None,
         "ping_ok": False,
         "rdp_open": False,
@@ -334,7 +335,8 @@ async def get_install_progress(db: AsyncSession, user_id: str, token_id: str, dr
     probe_key = _probe_key(user_id, token_id, droplet_id)
     if latest_job:
         response["windows_version"] = latest_job.windows_version
-        response["rdp_port"] = latest_job.rdp_port
+        if isinstance(latest_job.rdp_port, int) and 1 <= latest_job.rdp_port <= 65535:
+            response["rdp_port"] = latest_job.rdp_port
         response["rdp_password"] = _password_from_blob(latest_job.command)
         response["droplet"] = _overlay_droplet_windows_image(droplet, latest_job.windows_version)
 
