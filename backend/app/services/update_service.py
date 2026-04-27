@@ -5,6 +5,7 @@ import threading
 from fastapi import HTTPException
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+FRONTEND_ROOT = REPO_ROOT / "frontend"
 _update_lock = threading.Lock()
 
 
@@ -39,6 +40,43 @@ def _run_pull(branch: str) -> str:
         detail = (result.stderr or result.stdout or "").strip()
         raise HTTPException(status_code=409, detail=detail or "Failed to apply update")
     return (result.stdout or "").strip()
+
+
+def _run_frontend_build() -> str:
+    if not FRONTEND_ROOT.exists():
+        return ""
+
+    npm = shutil.which("npm")
+    if not npm:
+        raise HTTPException(status_code=503, detail="npm is not available on this server")
+
+    lock_file = FRONTEND_ROOT / "package-lock.json"
+    install_cmd = [npm, "ci"] if lock_file.exists() else [npm, "install"]
+    build_cmd = [npm, "run", "build"]
+
+    install = subprocess.run(
+        install_cmd,
+        cwd=str(FRONTEND_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if install.returncode != 0:
+        detail = (install.stderr or install.stdout or "").strip()
+        raise HTTPException(status_code=409, detail=detail or "Failed to install frontend dependencies")
+
+    build = subprocess.run(
+        build_cmd,
+        cwd=str(FRONTEND_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if build.returncode != 0:
+        detail = (build.stderr or build.stdout or "").strip()
+        raise HTTPException(status_code=409, detail=detail or "Failed to build frontend")
+
+    return "\n".join(part for part in [install.stdout or "", build.stdout or ""] if part).strip()
 
 
 def _upstream_remote_ref() -> str | None:
@@ -128,8 +166,10 @@ def apply_update() -> dict:
                 "output": "",
             }
 
-        output = _run_pull(before["branch"])
+        pull_output = _run_pull(before["branch"])
+        build_output = _run_frontend_build()
         after = get_update_status()
+        output = "\n".join(part for part in [pull_output, build_output] if part).strip()
         return {
             "ok": True,
             "updated": True,

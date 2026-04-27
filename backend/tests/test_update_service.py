@@ -60,3 +60,71 @@ def test_get_update_status_detached_head_uses_origin_default(monkeypatch):
     assert status["behind"] == 1
     assert status["update_available"] is True
     assert ("fetch", "--quiet", "origin") in calls
+
+
+def test_run_frontend_build_skips_when_frontend_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr(update_service, "FRONTEND_ROOT", tmp_path / "frontend")
+
+    output = update_service._run_frontend_build()
+
+    assert output == ""
+
+
+def test_run_frontend_build_runs_install_and_build(monkeypatch, tmp_path):
+    frontend_root = tmp_path / "frontend"
+    frontend_root.mkdir()
+    (frontend_root / "package-lock.json").write_text("{}", encoding="utf-8")
+
+    calls = []
+
+    class _Result:
+        def __init__(self, returncode=0, stdout="", stderr=""):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def fake_subprocess_run(command, cwd, capture_output, text, check):
+        calls.append((tuple(command), cwd, capture_output, text, check))
+        if command[-2:] == ["run", "build"]:
+            return _Result(stdout="build ok")
+        return _Result(stdout="install ok")
+
+    monkeypatch.setattr(update_service, "FRONTEND_ROOT", frontend_root)
+    monkeypatch.setattr(update_service.shutil, "which", lambda name: "/usr/bin/npm" if name == "npm" else None)
+    monkeypatch.setattr(update_service.subprocess, "run", fake_subprocess_run)
+
+    output = update_service._run_frontend_build()
+
+    assert calls[0][0] == ("/usr/bin/npm", "ci")
+    assert calls[1][0] == ("/usr/bin/npm", "run", "build")
+    assert output == "install ok\nbuild ok"
+
+
+def test_apply_update_includes_frontend_build_output(monkeypatch):
+    before_status = {
+        "branch": "main",
+        "update_available": True,
+    }
+    after_status = {
+        "branch": "main",
+        "update_available": False,
+    }
+
+    monkeypatch.setattr(update_service, "_git_available", lambda: None)
+    monkeypatch.setattr(update_service, "get_update_status", lambda: before_status)
+    monkeypatch.setattr(update_service, "_run_pull", lambda _branch: "pull ok")
+    monkeypatch.setattr(update_service, "_run_frontend_build", lambda: "build ok")
+
+    state = {"count": 0}
+
+    def fake_status():
+        state["count"] += 1
+        return before_status if state["count"] == 1 else after_status
+
+    monkeypatch.setattr(update_service, "get_update_status", fake_status)
+
+    result = update_service.apply_update()
+
+    assert result["updated"] is True
+    assert result["status"] == after_status
+    assert result["output"] == "pull ok\nbuild ok"
